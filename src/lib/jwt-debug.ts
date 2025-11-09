@@ -1,3 +1,5 @@
+import { io } from 'socket.io-client';
+
 // Debug JWT token issue
 export const debugJWT = async () => {
   console.log('🔍 Debugging JWT token issue...');

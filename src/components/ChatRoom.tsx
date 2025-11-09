@@ -200,7 +200,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       console.log('📊 Current messages before adding:', messages);
       
       // Add safety checks for message data
-      if (!message || !message.id || !message.message) {
+      if (!message || !message.id || !message.content) {
         console.log('⚠️ Invalid message data received:', message);
         return;
       }
@@ -293,12 +293,13 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     console.log('📤 Message ID generated:', messageId);
     
     // Add the message locally first to show immediate feedback
-    const localMessage = {
+    const localMessage: Message = {
       id: messageId,
       userName: userName,
-      message: newMessage.trim(),
-      timestamp: new Date().toISOString(),
-      userId: getSocket().id
+      content: newMessage.trim(),
+      timestamp: new Date(),
+      userId: getSocket().id || '',
+      type: 'text'
     };
     
     console.log('📤 Adding local message:', localMessage);
@@ -485,7 +486,6 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
               Room: {roomId}
             </h5>
             <small className="text-secondary">
-              {console.log(`📊 Participant count calculation: users.length=${users?.length || 0}, total=${(users?.length || 0) + 1}`)}
               {(users?.length || 0) + 1} participant{(users?.length || 0) !== 0 ? 's' : ''}
               <span className="d-block">
                 <i className="bi bi-people-fill me-1"></i>
@@ -547,7 +547,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
                         }`}
                       >
                         <div className="small text-secondary">{message?.userName}</div>
-                        <div>{message?.message}</div>
+                        <div>{message?.content}</div>
                         <div className="small text-muted">{formatTime(message?.timestamp)}</div>
                       </div>
                     </div>

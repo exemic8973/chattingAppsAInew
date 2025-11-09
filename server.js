@@ -359,9 +359,10 @@ io.on('connection', (socket) => {
     const chatMessage = {
       id: messageId || uuidv4(), // Use provided messageId or generate new one
       userName: participant.name,
-      message: message,
+      content: message,
       timestamp: new Date().toISOString(),
-      userId: participant.id
+      userId: participant.id,
+      type: 'text'
     };
     
     console.log(`💾 Storing message in room ${roomId}:`, chatMessage);

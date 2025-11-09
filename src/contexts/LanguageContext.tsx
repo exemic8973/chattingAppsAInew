@@ -3,6 +3,12 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { translations } from '@/lib/translations';
 
+interface LanguagePack {
+  code: string;
+  name: string;
+  flag: string;
+}
+
 interface LanguageContextType {
   currentLanguage: LanguagePack;
   setLanguage: (langCode: string) => void;
@@ -51,7 +57,8 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   };
 
   const t = (key: string): string => {
-    return translations[currentLanguage.code][key] || translations.en[key] || key;
+    const langCode = currentLanguage.code as 'en' | 'zh';
+    return translations[langCode][key as keyof typeof translations.en] || translations.en[key as keyof typeof translations.en] || key;
   };
 
   const availableLanguages = [
