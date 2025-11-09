@@ -39,6 +39,7 @@ const userSessions = new Map(); // userId -> user data
 // JWT secret key (in production, use environment variable)
 // Use same JWT secret as Next.js API
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production'; // Must match Next.js API
+console.log('🔐 Server.js JWT_SECRET configured:', JWT_SECRET ? 'Yes (length: ' + JWT_SECRET.length + ')' : 'No');
 
 // Add test user for development - ensure it matches Next.js API
 const addTestUser = async () => {
@@ -109,14 +110,22 @@ io.on('connection', (socket) => {
   socket.on('authenticate', (data) => {
     try {
       const { token } = data;
-      
+
+      console.log('🔑 Authentication attempt for socket:', socket.id);
+      console.log('🔐 Using JWT_SECRET length:', JWT_SECRET.length);
+
       if (!token) {
+        console.log('❌ No token provided');
         socket.emit('auth-error', { message: 'No token provided' });
         return;
       }
-      
+
+      console.log('🔍 Token received (first 20 chars):', token.substring(0, 20) + '...');
+
       // Verify JWT token
+      console.log('🔐 Verifying token with JWT_SECRET...');
       const decoded = jwt.verify(token, JWT_SECRET);
+      console.log('✅ Token verified successfully:', decoded);
       
       // Verify user exists in our storage - create if not found
       let storedUser = users.get(decoded.email);

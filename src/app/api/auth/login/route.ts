@@ -4,6 +4,8 @@ import { userStore } from '@/lib/userStore';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+console.log('🔐 Login API JWT_SECRET configured:', JWT_SECRET ? 'Yes (length: ' + JWT_SECRET.length + ')' : 'No');
+
 export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();

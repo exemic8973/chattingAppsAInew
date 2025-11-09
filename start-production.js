@@ -6,11 +6,28 @@ console.log('🚀 Starting production servers...');
 // Set NODE_ENV to production
 process.env.NODE_ENV = 'production';
 
+// Verify JWT_SECRET is set
+if (!process.env.JWT_SECRET) {
+  console.warn('⚠️ WARNING: JWT_SECRET is not set! Using default secret (NOT SECURE FOR PRODUCTION)');
+  process.env.JWT_SECRET = 'your-secret-key-change-in-production';
+} else {
+  console.log('✅ JWT_SECRET is configured');
+}
+
+console.log('🔑 Environment variables:');
+console.log('  - NODE_ENV:', process.env.NODE_ENV);
+console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? '✅ Set' : '❌ Not set');
+console.log('  - PORT:', process.env.PORT || 'default (3000)');
+
 // Start backend server (Socket.IO on port 3001)
 console.log('📡 Starting backend server on port 3001...');
 const backend = spawn('node', ['server.js'], {
   stdio: 'inherit',
-  env: { ...process.env, PORT: '3001' }
+  env: {
+    ...process.env,
+    PORT: '3001',
+    JWT_SECRET: process.env.JWT_SECRET || 'your-secret-key-change-in-production'
+  }
 });
 
 backend.on('error', (error) => {
