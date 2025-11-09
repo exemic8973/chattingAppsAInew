@@ -1,7 +1,7 @@
-import Peer from 'simple-peer';
+import SimplePeer from 'simple-peer';
 
 export class WebRTCManager {
-  private peer: Peer.Instance | null = null;
+  private peer: SimplePeer.Instance | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null;
@@ -11,7 +11,7 @@ export class WebRTCManager {
   }
 
   private setupPeer() {
-    this.peer = new Peer({
+    this.peer = new SimplePeer({
       initiator: false,
       trickle: false,
       stream: this.localStream || undefined,
@@ -63,7 +63,7 @@ export class WebRTCManager {
       this.peer.destroy();
     }
 
-    this.peer = new Peer({
+    this.peer = new SimplePeer({
       initiator: isInitiator,
       trickle: false,
       stream: this.localStream || undefined,
