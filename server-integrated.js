@@ -113,6 +113,10 @@ nextApp.prepare().then(() => {
 
       } catch (error) {
         console.error('💥 Socket authentication error:', error);
+        console.error('🔐 JWT_SECRET being used (length):', JWT_SECRET.length);
+        console.error('🔐 JWT_SECRET first 10 chars:', JWT_SECRET.substring(0, 10));
+        console.error('📝 Error name:', error.name);
+        console.error('📝 Error message:', error.message);
         socket.emit('auth-error', { message: 'Authentication failed', details: error.message });
       }
     });
