@@ -281,8 +281,8 @@ nextApp.prepare().then(() => {
     });
   });
 
-  // Let Next.js handle all other routes
-  app.all('*', (req, res) => {
+  // Let Next.js handle all other routes (must be last)
+  app.use((req, res) => {
     return nextHandler(req, res);
   });
 
