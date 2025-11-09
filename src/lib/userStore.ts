@@ -32,17 +32,26 @@ class UserStore {
       throw new Error('User already exists');
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user: User = {
-      id: Date.now().toString(),
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      userName: userName.trim(),
-      createdAt: new Date().toISOString()
-    };
+    try {
+      console.log('🔐 Hashing password for user:', email);
+      const hashedPassword = await bcrypt.hash(password, 10);
+      console.log('✅ Password hashed successfully');
 
-    this.users.set(email.toLowerCase(), user);
-    return user;
+      const user: User = {
+        id: Date.now().toString(),
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        userName: userName.trim(),
+        createdAt: new Date().toISOString()
+      };
+
+      this.users.set(email.toLowerCase(), user);
+      console.log('✅ User stored in userStore:', email);
+      return user;
+    } catch (error) {
+      console.error('❌ Error in createUser:', error);
+      throw error;
+    }
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -50,9 +59,20 @@ class UserStore {
   }
 
   async validatePassword(email: string, password: string): Promise<boolean> {
-    const user = await this.findByEmail(email);
-    if (!user) return false;
-    return bcrypt.compare(password, user.password);
+    try {
+      const user = await this.findByEmail(email);
+      if (!user) {
+        console.log('⚠️ User not found for validation:', email);
+        return false;
+      }
+      console.log('🔐 Validating password for user:', email);
+      const isValid = await bcrypt.compare(password, user.password);
+      console.log('✅ Password validation result:', isValid);
+      return isValid;
+    } catch (error) {
+      console.error('❌ Error in validatePassword:', error);
+      return false;
+    }
   }
 
   getAllUsers(): User[] {

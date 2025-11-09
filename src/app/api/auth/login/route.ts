@@ -10,6 +10,8 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json();
 
+    console.log('🔑 Login request received for:', email);
+
     if (!email || !password) {
       return NextResponse.json(
         { message: 'Email and password are required' },
@@ -20,6 +22,7 @@ export async function POST(request: NextRequest) {
     // Validate credentials using userStore
     const isValid = await userStore.validatePassword(email, password);
     if (!isValid) {
+      console.log('❌ Invalid credentials for:', email);
       return NextResponse.json(
         { message: 'Invalid credentials' },
         { status: 401 }
@@ -28,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     const user = await userStore.findByEmail(email);
     if (!user) {
+      console.log('❌ User not found:', email);
       return NextResponse.json(
         { message: 'User not found' },
         { status: 404 }
@@ -41,6 +45,8 @@ export async function POST(request: NextRequest) {
       { expiresIn: '7d' }
     );
 
+    console.log('✅ Login successful for:', email);
+
     return NextResponse.json({
       message: 'Login successful',
       token,
@@ -52,9 +58,10 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('💥 Login error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { message: 'Internal server error', error: errorMessage },
       { status: 500 }
     );
   }
