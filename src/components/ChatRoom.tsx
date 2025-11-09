@@ -31,6 +31,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const webrtcManager = useRef<WebRTCManager | null>(null);
+  const hasJoinedRoom = useRef(false); // Track if we've already joined to prevent duplicates
 
   useEffect(() => {
     console.log('🚀 Initializing ChatRoom...');
@@ -38,60 +39,133 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     console.log('👤 User Name:', userName);
     console.log('🔑 Passcode:', passcode);
     console.log('⭐ Is Owner:', isOwner);
-    
+
     const socket = getSocket();
     console.log('🔌 Socket initialized with ID:', socket.id);
     console.log('📡 Socket connected:', socket.connected);
-    
+
     webrtcManager.current = new WebRTCManager();
+
+    // 🔐 CRITICAL FIX: Authenticate socket before joining room
+    const authenticateSocket = (): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+          console.log('⚠️ No auth token found, proceeding as guest');
+          resolve();
+          return;
+        }
+
+        console.log('🔑 Authenticating socket with token...');
+
+        let authTimeout: NodeJS.Timeout;
+        let isAuthenticated = false;
+
+        const cleanup = () => {
+          socket.off('auth-success', handleAuthSuccess);
+          socket.off('auth-error', handleAuthError);
+          if (authTimeout) clearTimeout(authTimeout);
+        };
+
+        const handleAuthSuccess = (data: any) => {
+          console.log('✅ Socket authenticated successfully:', data);
+          isAuthenticated = true;
+          cleanup();
+          resolve();
+        };
+
+        const handleAuthError = (error: any) => {
+          console.error('❌ Socket authentication failed:', error);
+          cleanup();
+          // Continue anyway as guest
+          resolve();
+        };
+
+        authTimeout = setTimeout(() => {
+          if (!isAuthenticated) {
+            console.log('⏰ Auth timeout, continuing as guest...');
+            cleanup();
+            resolve();
+          }
+        }, 5000);
+
+        socket.on('auth-success', handleAuthSuccess);
+        socket.on('auth-error', handleAuthError);
+
+        if (socket.connected) {
+          socket.emit('authenticate', { token });
+        } else {
+          socket.once('connect', () => {
+            console.log('✅ Socket connected, now authenticating...');
+            socket.emit('authenticate', { token });
+          });
+        }
+      });
+    };
 
     // Function to join room with proper connection verification
     const joinRoomWithVerification = async () => {
+      // 🔥 CRITICAL FIX: Prevent duplicate joins
+      if (hasJoinedRoom.current) {
+        console.log('⚠️ Already joined room, skipping duplicate join');
+        return Promise.resolve();
+      }
+
       console.log('🚪 Attempting to join room with verification...');
-      
+
       return new Promise((resolve, reject) => {
         let joinTimeout: NodeJS.Timeout;
         let hasJoined = false;
-        
+
         // Set up event listeners BEFORE joining
         const cleanup = () => {
           socket.off('room-joined', handleRoomJoined);
           socket.off('error', handleError);
           if (joinTimeout) clearTimeout(joinTimeout);
         };
-        
+
         const handleRoomJoined = (data: any) => {
           console.log('✅ Room joined successfully:', data);
           hasJoined = true;
+          hasJoinedRoom.current = true; // Mark as joined
           cleanup();
           resolve(data);
         };
-        
+
         const handleError = (error: any) => {
           console.log('❌ Room join error:', error);
           cleanup();
           reject(error);
         };
-        
-        // Set timeout for room joining
+
+        // Set timeout for room joining (don't retry, just fail)
         joinTimeout = setTimeout(() => {
           if (!hasJoined) {
-            console.log('⏰ Room join timeout - retrying...');
+            console.log('⏰ Room join timeout');
             cleanup();
-            // Retry once
-            attemptJoin();
+            reject(new Error('Room join timeout'));
           }
-        }, 5000);
-        
+        }, 10000);
+
         const attemptJoin = () => {
-          console.log('🚀 Sending join-room event:', { roomId, userName, passcode });
-          socket.emit('join-room', { roomId, passcode, userName });
+          if (hasJoinedRoom.current) {
+            console.log('⚠️ Already joined during attempt, aborting');
+            cleanup();
+            resolve(undefined);
+            return;
+          }
+
+          // 🔥 CRITICAL FIX: Send persistent user ID to prevent duplicates on reconnect
+          const persistentUserId = localStorage.getItem('socketUserId');
+          console.log('🚀 Sending join-room event:', { roomId, userName, passcode, persistentUserId });
+          socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
         };
-        
+
         // Set up listeners
         socket.on('room-joined', handleRoomJoined);
         socket.on('error', handleError);
-        
+
         // Start the join process
         if (socket.connected) {
           attemptJoin();
@@ -105,16 +179,22 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       });
     };
 
-    // Join the room with verification
-    joinRoomWithVerification()
-      .then((data) => {
-        console.log('🎉 Successfully joined room:', data);
-        // Room-joined event will be handled by the existing listener
-      })
-      .catch((error) => {
-        console.error('❌ Failed to join room:', error);
-        alert('Failed to join room. Please refresh and try again.');
-      });
+    // 🔐 Authenticate socket FIRST, then join the room (only once)
+    if (!hasJoinedRoom.current) {
+      authenticateSocket()
+        .then(() => {
+          console.log('✅ Socket authentication complete, now joining room...');
+          return joinRoomWithVerification();
+        })
+        .then((data) => {
+          console.log('🎉 Successfully joined room:', data);
+          // Room-joined event will be handled by the existing listener
+        })
+        .catch((error) => {
+          console.error('❌ Failed to join room:', error);
+          alert('Failed to join room. Please refresh and try again.');
+        });
+    }
 
     socket.on('room-joined', ({ roomId, users, messages }) => {
       console.log('✅ Successfully joined room:', roomId);

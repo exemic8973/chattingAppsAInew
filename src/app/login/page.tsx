@@ -40,9 +40,9 @@ export default function LoginPage() {
       if (response.ok) {
         // Store token in localStorage
         localStorage.setItem('authToken', data.token);
-        localStorage.setItem('userName', data.userName);
-        localStorage.setItem('userId', data.userId);
-        
+        localStorage.setItem('userName', data.user.userName); // FIX: data.user.userName not data.userName
+        localStorage.setItem('userId', data.user.id); // FIX: data.user.id not data.userId
+
         // Redirect to room creation page
         router.push('/create-room');
       } else {

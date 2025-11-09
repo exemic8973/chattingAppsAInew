@@ -160,24 +160,45 @@ nextApp.prepare().then(() => {
 
     // Join room event
     socket.on('join-room', (data) => {
-      const { roomId, passcode, userName } = data;
+      console.log('🚪 Join room event received:', data);
+      const { roomId, passcode, userName, persistentUserId } = data;
 
       const room = rooms.get(roomId);
       if (!room) {
+        console.log('❌ Room not found:', roomId);
         socket.emit('error', { message: 'Room not found' });
         return;
       }
 
+      console.log('🔑 Checking passcode for room:', roomId);
       if (room.passcode !== passcode) {
+        console.log('❌ Invalid passcode for room:', roomId);
         socket.emit('error', { message: 'Invalid passcode' });
         return;
       }
+      console.log('✅ Passcode valid for room:', roomId);
 
-      const userId = socket.user ? socket.user.id : `guest-${socket.id}`;
-      const existingParticipant = room.participants.find(p => p.id === userId);
+      // 🔥 CRITICAL FIX: Use persistent user ID from client to prevent duplicates on reconnect
+      const userId = socket.user ? socket.user.id : (persistentUserId || `guest-${socket.id}`);
+      console.log('👤 User ID for joining:', userId);
+      console.log('👤 Persistent User ID from client:', persistentUserId);
+
+      // 🔥 FIX: Find existing participant by NAME or ID (in case of mismatched IDs from cached code)
+      const existingParticipant = room.participants.find(p =>
+        p.id === userId || p.name === userName
+      );
+      console.log('🔍 Existing participant found:', existingParticipant ? existingParticipant.name : 'None');
 
       if (existingParticipant) {
+        console.log('🔄 Existing participant rejoining:', existingParticipant.name);
         existingParticipant.socketId = socket.id;
+
+        // 🔥 FIX: Update participant ID if they now have a persistent ID (upgrade from guest-xxx)
+        if (persistentUserId && existingParticipant.id.startsWith('guest-')) {
+          console.log(`⬆️ Upgrading participant ID from ${existingParticipant.id} to ${persistentUserId}`);
+          existingParticipant.id = persistentUserId;
+        }
+
         socket.emit('room-joined', {
           roomId,
           users: room.participants.map(p => ({
@@ -188,9 +209,11 @@ nextApp.prepare().then(() => {
           messages: room.messages || []
         });
         socket.join(roomId);
+        console.log('✅ Existing participant rejoined room:', roomId);
         return;
       }
 
+      console.log('👤 New participant joining:', userName);
       const participant = {
         id: userId,
         name: userName,
@@ -206,6 +229,20 @@ nextApp.prepare().then(() => {
         room.messages = [];
       }
 
+      // 🔥 CRITICAL FIX: Remove duplicate participants with same name (from old sessions)
+      const uniqueParticipants = room.participants.filter((p, index, self) =>
+        index === self.findIndex(t => t.name === p.name)
+      );
+
+      if (uniqueParticipants.length !== room.participants.length) {
+        console.log(`⚠️ Removed ${room.participants.length - uniqueParticipants.length} duplicate participants`);
+        room.participants = uniqueParticipants;
+      }
+
+      console.log('📤 Emitting room-joined to user:', userName);
+      console.log('👥 Participants in room:', room.participants.length);
+      console.log('💬 Messages in room:', room.messages.length);
+
       socket.emit('room-joined', {
         roomId,
         users: room.participants.map(p => ({
@@ -215,6 +252,8 @@ nextApp.prepare().then(() => {
         })),
         messages: room.messages
       });
+
+      console.log('✅ User joined room successfully:', userName);
 
       socket.to(roomId).emit('user-joined', {
         userName,
