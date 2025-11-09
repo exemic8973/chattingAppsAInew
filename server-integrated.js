@@ -55,16 +55,8 @@ nextApp.prepare().then(() => {
   const app = express();
   const httpServer = createServer(app);
 
-  // CORS configuration
-  app.use(cors({
-    origin: process.env.NODE_ENV === 'production'
-      ? process.env.CLIENT_URL || '*'
-      : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    credentials: true
-  }));
-  app.use(express.json());
+  // Don't use global middleware that consumes request body
+  // Next.js needs to handle its own requests without interference
 
   // Socket.io setup
   const io = new Server(httpServer, {
@@ -270,18 +262,20 @@ nextApp.prepare().then(() => {
     });
   });
 
-  // Health check endpoint
+  // Health check endpoint - simple, no middleware
   app.get('/api/health', (req, res) => {
-    res.json({
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       rooms: Array.from(rooms.keys()),
       connectedUsers: io.engine.clientsCount
-    });
+    }));
   });
 
-  // Let Next.js handle all other routes (must be last)
+  // Let Next.js handle all other routes - pass raw request/response
+  // Use app.use instead of app.all to avoid path-to-regexp issues
   app.use((req, res) => {
     return nextHandler(req, res);
   });
