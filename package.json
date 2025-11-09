@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js & next start -p ${PORT:-3000}",
+    "start": "node start-production.js",
     "start:frontend": "next start -p ${PORT:-3000}",
     "start:backend": "node server.js",
     "lint": "next lint",

@@ -313,6 +313,7 @@ io.on('connection', (socket) => {
     // 🔥 CRITICAL FIX: Notify other participants in the room about the new user
     console.log(`📢 Broadcasting user-joined event to room ${roomId}`);
     socket.to(roomId).emit('user-joined', {
+      userName,
       user: {
         id: participant.id,
         name: participant.name,
@@ -320,19 +321,7 @@ io.on('connection', (socket) => {
       },
       participantCount: room.participants.length
     });
-    });
-    
-    // Notify other participants about the new user
-    console.log(`📤 Broadcasting user-joined to all other participants in room ${roomId}`);
-    socket.to(roomId).emit('user-joined', { 
-      userName,
-      user: {
-        id: participant.id,
-        name: participant.name,
-        isHost: participant.isCreator
-      }
-    });
-    
+
     console.log(`✅ Join room process completed for ${userName}`);
   });
 
@@ -387,13 +376,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-      console.log('🔌 User disconnected:', socket.id);
-      if (socket.userId) {
-        userSessions.delete(socket.userId);
-      }
-    });
+    console.log('🔌 User disconnected:', socket.id);
+    if (socket.userId) {
+      userSessions.delete(socket.userId);
+    }
   });
-});
 });
 
 // Start server
