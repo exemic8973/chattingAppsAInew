@@ -1,0 +1,15 @@
+{
+  "name": "chattingAppsAInew",
+  "services": [
+    {
+      "name": "app",
+      "type": "nodejs",
+      "buildCommand": "npm install && npm run build",
+      "startCommand": "npm start",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": "3000"
+      }
+    }
+  ]
+}
