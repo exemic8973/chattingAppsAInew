@@ -6,8 +6,10 @@ class SocketManager {
   
   getSocket(userId: string): Socket {
     if (!this.sockets.has(userId)) {
-      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
+      // Use environment variable or fallback to localhost:3000 (integrated server)
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
       console.log(`🔌 Creating new socket for user ${userId} connecting to:`, socketUrl);
+      console.log(`🔍 NEXT_PUBLIC_SOCKET_URL from env:`, process.env.NEXT_PUBLIC_SOCKET_URL || 'NOT SET');
       
       const socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
