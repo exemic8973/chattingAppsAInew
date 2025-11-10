@@ -14,6 +14,34 @@ export const translations = {
     'auth.loginLink': 'Login',
     'auth.emailRequired': 'Email is required',
     'auth.passwordRequired': 'Password is required',
+
+    // Login Page
+    'login.title': 'Login',
+    'login.subtitle': 'Sign in to your account',
+    'login.email': 'Email',
+    'login.password': 'Password',
+    'login.button': 'Login',
+    'login.signupPrompt': "Don't have an account?",
+    'login.signupLink': 'Sign up',
+    'login.backToHome': 'Back to Home',
+    'login.note': 'Enter your credentials to access your account',
+
+    // Signup Page
+    'signup.title': 'Create Account',
+    'signup.subtitle': 'Register a new account',
+    'signup.name': 'Your Name',
+    'signup.email': 'Email',
+    'signup.password': 'Password',
+    'signup.confirmPassword': 'Confirm Password',
+    'signup.button': 'Sign Up',
+    'signup.loginPrompt': 'Already have an account?',
+    'signup.loginLink': 'Login',
+    'signup.backToHome': 'Back to Home',
+
+    // Common
+    'common.loading': 'Loading...',
+    'common.info': 'Info',
+    'success': 'Success!',
     
     // Create Room
     'createRoom.formTitle': 'Create New Room',
@@ -33,10 +61,32 @@ export const translations = {
     
     // Chat Room
     'chatRoom.title': 'Chat Room',
+    'chatRoom.room': 'Room',
+    'chatRoom.participant': 'participant',
+    'chatRoom.participants': 'participants',
+    'chatRoom.you': 'You',
+    'chatRoom.host': 'Host',
+    'chatRoom.other': 'other',
+    'chatRoom.others': 'others',
     'chatRoom.leave': 'Leave Room',
     'chatRoom.send': 'Send',
-    'chatRoom.typeMessage': 'Type your message...',
+    'chatRoom.typeMessage': 'Type a message...',
+    'chatRoom.noMessages': 'No messages yet. Start the conversation!',
     'chatRoom.joining': 'Joining room...',
+    'chatRoom.calling': 'Calling...',
+    'chatRoom.inCall': 'In Call',
+    'chatRoom.incomingCall': 'Incoming',
+    'chatRoom.call': 'call',
+    'chatRoom.from': 'From',
+    'chatRoom.accept': 'Accept',
+    'chatRoom.reject': 'Reject',
+    'chatRoom.roomOwnerPanel': 'Room Owner Panel',
+    'chatRoom.roomId': 'Room ID',
+    'chatRoom.passcode': 'Passcode',
+    'chatRoom.shareUrl': 'Share URL',
+    'chatRoom.copyRoomId': 'Copy Room ID',
+    'chatRoom.copyPasscode': 'Copy Passcode',
+    'chatRoom.copyShareLink': 'Copy Share Link',
     
     // Global
     'logout': 'Logout',
@@ -55,13 +105,15 @@ export const translations = {
     'validation.required': 'This field is required',
     'validation.email': 'Please enter a valid email address',
     'validation.password': 'Password must be at least 6 characters',
-    
+    'validation.passwordMatch': 'Passwords do not match',
+
     // Errors
     'error.server': 'Server error occurred',
     'error.network': 'Network error occurred',
     'error.unauthorized': 'Unauthorized access',
     'error.roomNotFound': 'Room not found',
-    'error.invalidPasscode': 'Invalid passcode'
+    'error.invalidPasscode': 'Invalid passcode',
+    'error.authenticationFailed': 'Authentication failed. Please check your credentials.'
   },
   zh: {
     // Authentication
@@ -78,6 +130,34 @@ export const translations = {
     'auth.loginLink': '登录',
     'auth.emailRequired': '请输入邮箱地址',
     'auth.passwordRequired': '请输入密码',
+
+    // Login Page
+    'login.title': '登录',
+    'login.subtitle': '登录您的账号',
+    'login.email': '邮箱',
+    'login.password': '密码',
+    'login.button': '登录',
+    'login.signupPrompt': '还没有账号？',
+    'login.signupLink': '注册',
+    'login.backToHome': '返回主页',
+    'login.note': '输入您的凭据以访问您的账号',
+
+    // Signup Page
+    'signup.title': '创建账号',
+    'signup.subtitle': '注册新账号',
+    'signup.name': '您的名字',
+    'signup.email': '邮箱',
+    'signup.password': '密码',
+    'signup.confirmPassword': '确认密码',
+    'signup.button': '注册',
+    'signup.loginPrompt': '已有账号？',
+    'signup.loginLink': '登录',
+    'signup.backToHome': '返回主页',
+
+    // Common
+    'common.loading': '加载中...',
+    'common.info': '信息',
+    'success': '成功！',
     
     // Create Room
     'createRoom.formTitle': '创建新房间',
@@ -97,10 +177,32 @@ export const translations = {
     
     // Chat Room
     'chatRoom.title': '聊天室',
+    'chatRoom.room': '房间',
+    'chatRoom.participant': '位参与者',
+    'chatRoom.participants': '位参与者',
+    'chatRoom.you': '您',
+    'chatRoom.host': '主持人',
+    'chatRoom.other': '位其他',
+    'chatRoom.others': '位其他',
     'chatRoom.leave': '离开房间',
     'chatRoom.send': '发送',
-    'chatRoom.typeMessage': '输入您的消息...',
+    'chatRoom.typeMessage': '输入消息...',
+    'chatRoom.noMessages': '还没有消息。开始对话吧！',
     'chatRoom.joining': '正在加入房间...',
+    'chatRoom.calling': '正在呼叫...',
+    'chatRoom.inCall': '通话中',
+    'chatRoom.incomingCall': '来电',
+    'chatRoom.call': '通话',
+    'chatRoom.from': '来自',
+    'chatRoom.accept': '接受',
+    'chatRoom.reject': '拒绝',
+    'chatRoom.roomOwnerPanel': '房间所有者面板',
+    'chatRoom.roomId': '房间ID',
+    'chatRoom.passcode': '密码',
+    'chatRoom.shareUrl': '分享链接',
+    'chatRoom.copyRoomId': '复制房间ID',
+    'chatRoom.copyPasscode': '复制密码',
+    'chatRoom.copyShareLink': '复制分享链接',
     
     // Global
     'logout': '退出',
@@ -119,12 +221,14 @@ export const translations = {
     'validation.required': '此字段为必填项',
     'validation.email': '请输入有效的邮箱地址',
     'validation.password': '密码长度至少为6个字符',
-    
+    'validation.passwordMatch': '密码不匹配',
+
     // Errors
     'error.server': '服务器发生错误',
     'error.network': '网络发生错误',
     'error.unauthorized': '未授权访问',
     'error.roomNotFound': '找不到房间',
-    'error.invalidPasscode': '密码无效'
+    'error.invalidPasscode': '密码无效',
+    'error.authenticationFailed': '身份验证失败。请检查您的凭据。'
   }
 };

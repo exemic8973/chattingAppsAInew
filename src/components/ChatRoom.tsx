@@ -5,6 +5,7 @@ import { getSocket, initializeSocket } from '@/lib/socket';
 import { WebRTCManager } from '@/lib/webrtc';
 import { User, Message, CallState } from '@/types';
 import { formatTime, copyToClipboard } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ChatRoomProps {
   roomId: string;
@@ -14,9 +15,11 @@ interface ChatRoomProps {
 }
 
 export default function ChatRoom({ roomId, userName, passcode, isOwner = false }: ChatRoomProps) {
+  const { t } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [showOwnerPanel, setShowOwnerPanel] = useState(false); // Default hidden
   const [callState, setCallState] = useState<CallState>({
     isCalling: false,
     isInCall: false,
@@ -104,98 +107,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       });
     };
 
-    // Function to join room with proper connection verification
-    const joinRoomWithVerification = async () => {
-      // 🔥 CRITICAL FIX: Prevent duplicate joins
-      if (hasJoinedRoom.current) {
-        console.log('⚠️ Already joined room, skipping duplicate join');
-        return Promise.resolve();
-      }
-
-      console.log('🚪 Attempting to join room with verification...');
-
-      return new Promise((resolve, reject) => {
-        let joinTimeout: NodeJS.Timeout;
-        let hasJoined = false;
-
-        // Set up event listeners BEFORE joining
-        const cleanup = () => {
-          socket.off('room-joined', handleRoomJoined);
-          socket.off('error', handleError);
-          if (joinTimeout) clearTimeout(joinTimeout);
-        };
-
-        const handleRoomJoined = (data: any) => {
-          console.log('✅ Room joined successfully:', data);
-          hasJoined = true;
-          hasJoinedRoom.current = true; // Mark as joined
-          cleanup();
-          resolve(data);
-        };
-
-        const handleError = (error: any) => {
-          console.log('❌ Room join error:', error);
-          cleanup();
-          reject(error);
-        };
-
-        // Set timeout for room joining (don't retry, just fail)
-        joinTimeout = setTimeout(() => {
-          if (!hasJoined) {
-            console.log('⏰ Room join timeout');
-            cleanup();
-            reject(new Error('Room join timeout'));
-          }
-        }, 10000);
-
-        const attemptJoin = () => {
-          if (hasJoinedRoom.current) {
-            console.log('⚠️ Already joined during attempt, aborting');
-            cleanup();
-            resolve(undefined);
-            return;
-          }
-
-          // 🔥 CRITICAL FIX: Send persistent user ID to prevent duplicates on reconnect
-          const persistentUserId = localStorage.getItem('socketUserId');
-          console.log('🚀 Sending join-room event:', { roomId, userName, passcode, persistentUserId });
-          socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
-        };
-
-        // Set up listeners
-        socket.on('room-joined', handleRoomJoined);
-        socket.on('error', handleError);
-
-        // Start the join process
-        if (socket.connected) {
-          attemptJoin();
-        } else {
-          console.log('⏳ Waiting for socket connection...');
-          socket.once('connect', () => {
-            console.log('✅ Socket connected, now joining room...');
-            attemptJoin();
-          });
-        }
-      });
-    };
-
-    // 🔐 Authenticate socket FIRST, then join the room (only once)
-    if (!hasJoinedRoom.current) {
-      authenticateSocket()
-        .then(() => {
-          console.log('✅ Socket authentication complete, now joining room...');
-          return joinRoomWithVerification();
-        })
-        .then((data) => {
-          console.log('🎉 Successfully joined room:', data);
-          // Room-joined event will be handled by the existing listener
-        })
-        .catch((error) => {
-          console.error('❌ Failed to join room:', error);
-          alert('Failed to join room. Please refresh and try again.');
-        });
-    }
-
+    // 🔥 CRITICAL FIX: Set up room-joined listener BEFORE attempting to join
     socket.on('room-joined', ({ roomId, users, messages }) => {
       console.log('✅ Successfully joined room:', roomId);
       console.log('👥 Participants received:', users);
@@ -224,39 +136,16 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       console.log('✅ Room join process completed');
     });
 
-    socket.on('user-joined', ({ userName, user }) => {
-      console.log('👤 New user joined event received:', userName, user);
-      console.log('📊 Current users before adding:', users);
-      
-      if (user && user.id && user.name) {
-        setUsers(prev => {
-          console.log('📊 Previous users:', prev);
-          // Check if user already exists
-          const exists = prev.some(u => u.id === user.id);
-          if (exists) {
-            console.log('⚠️ User already exists, skipping:', user.id);
-            return prev;
-          }
-          const newUsers = [...prev, user];
-          console.log('📊 New users after adding:', newUsers);
-          console.log(`📊 Total participants now: ${newUsers.length + 1}`); // +1 for current user
-          return newUsers;
-        });
-      } else {
-        console.log('⚠️ Invalid user data received in user-joined event:', user);
-      }
-    });
-
-    socket.on('user-left', (userName: string) => {
-      console.log('👤 User left:', userName);
-      setUsers(prev => prev.filter(user => user.name !== userName));
-    });
-
-    // 🔥 CRITICAL FIX: Handle new user joining the room
-    socket.on('user-joined', (data: { user: { id: string; name: string; isHost: boolean }, participantCount: number }) => {
+    // 🔥 CRITICAL FIX: Handle new user joining the room (consolidated handler)
+    socket.on('user-joined', (data: { userName?: string; user: { id: string; name: string; isHost: boolean }; participantCount?: number }) => {
       console.log('👤 New user joined:', data.user);
       console.log('📊 Participant count:', data.participantCount);
-      
+
+      if (!data.user || !data.user.id || !data.user.name) {
+        console.log('⚠️ Invalid user data received in user-joined event:', data.user);
+        return;
+      }
+
       // Check if user already exists to prevent duplicates
       setUsers(prev => {
         const exists = prev.some(user => user.id === data.user.id);
@@ -264,7 +153,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
           console.log('⚠️ User already exists, skipping:', data.user.name);
           return prev;
         }
-        
+
         const newUsers = [...prev, {
           id: data.user.id,
           name: data.user.name,
@@ -273,6 +162,11 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         console.log('👥 Updated users list:', newUsers);
         return newUsers;
       });
+    });
+
+    socket.on('user-left', (userName: string) => {
+      console.log('👤 User left:', userName);
+      setUsers(prev => prev.filter(user => user.name !== userName));
     });
 
     socket.on('new-message', (message: Message) => {
@@ -326,6 +220,39 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         webrtcManager.current.signal(signalData);
       }
     });
+
+    // 🔐 Authenticate and join room (only once)
+    if (!hasJoinedRoom.current) {
+      console.log('🚀 Starting authentication and room join process...');
+      hasJoinedRoom.current = true; // Mark as joining to prevent duplicates
+
+      authenticateSocket()
+        .then(() => {
+          console.log('✅ Socket authentication complete, now joining room...');
+
+          // Send join-room event
+          const persistentUserId = localStorage.getItem('socketUserId');
+          console.log('🚀 Sending join-room event:', { roomId, userName, passcode, persistentUserId });
+
+          if (socket.connected) {
+            socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+          } else {
+            console.log('⏳ Waiting for socket connection before joining...');
+            socket.once('connect', () => {
+              console.log('✅ Socket connected, now joining room...');
+              socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+            });
+          }
+        })
+        .catch((error) => {
+          console.error('❌ Authentication failed:', error);
+          // Try to join anyway as guest
+          const persistentUserId = localStorage.getItem('socketUserId');
+          if (socket.connected) {
+            socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+          }
+        });
+    }
 
     scrollToBottom();
 
@@ -494,67 +421,80 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
   };
 
   return (
-    <div className="min-h-screen d-flex flex-column" style={{ backgroundColor: '#1a1a2e', paddingTop: '20px' }}>
+    <div className="min-h-screen d-flex flex-column" style={{ backgroundColor: '#1a1a2e', paddingTop: '100px' }}>
       {isOwner && (
         <div className="glass-morphism p-3 mb-3">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h6 className="mb-1 text-warning">
-                <i className="bi bi-star-fill me-2"></i>
-                Room Owner Panel
-              </h6>
-              <div className="d-flex flex-wrap gap-3">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <h6 className="mb-0 text-warning">
+              <i className="bi bi-star-fill me-2"></i>
+              {t('chatRoom.roomOwnerPanel')}
+            </h6>
+            <button
+              className="btn btn-sm btn-outline-warning"
+              onClick={() => setShowOwnerPanel(!showOwnerPanel)}
+              title={showOwnerPanel ? 'Hide' : 'Show'}
+            >
+              <i className={`bi bi-chevron-${showOwnerPanel ? 'up' : 'down'}`}></i>
+            </button>
+          </div>
+
+          {showOwnerPanel && (
+            <div className="mt-3">
+              <div className="d-flex flex-wrap gap-3 mb-3">
                 <small className="text-secondary">
-                  <strong>Room ID:</strong> {roomId}
+                  <strong>{t('chatRoom.roomId')}:</strong> {roomId}
                 </small>
                 <small className="text-secondary">
-                  <strong>Passcode:</strong> {passcode}
+                  <strong>{t('chatRoom.passcode')}:</strong> {passcode}
                 </small>
                 <small className="text-secondary">
-                  <strong>Share URL:</strong> {window.location.origin}/room/{roomId}
+                  <strong>{t('chatRoom.shareUrl')}:</strong> {window.location.origin}/room/{roomId}
                 </small>
               </div>
+              <div className="d-flex gap-2">
+                <button
+                  className="btn btn-sm btn-outline-warning"
+                  onClick={async () => {
+                    const success = await copyToClipboard(roomId);
+                    if (!success) {
+                      alert(`${t('chatRoom.roomId')}: ${roomId}`);
+                    }
+                  }}
+                  title={t('chatRoom.copyRoomId')}
+                >
+                  <i className="bi bi-clipboard me-1"></i>
+                  {t('chatRoom.roomId')}
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-warning"
+                  onClick={async () => {
+                    const success = await copyToClipboard(passcode);
+                    if (!success) {
+                      alert(`${t('chatRoom.passcode')}: ${passcode}`);
+                    }
+                  }}
+                  title={t('chatRoom.copyPasscode')}
+                >
+                  <i className="bi bi-key me-1"></i>
+                  {t('chatRoom.passcode')}
+                </button>
+                <button
+                  className="btn btn-sm btn-outline-primary"
+                  onClick={async () => {
+                    const shareUrl = `${window.location.origin}/room/${roomId}`;
+                    const success = await copyToClipboard(shareUrl);
+                    if (!success) {
+                      alert(`${t('chatRoom.shareUrl')}: ${shareUrl}`);
+                    }
+                  }}
+                  title={t('chatRoom.copyShareLink')}
+                >
+                  <i className="bi bi-link me-1"></i>
+                  {t('chatRoom.shareUrl')}
+                </button>
+              </div>
             </div>
-            <div className="d-flex gap-2">
-              <button
-                className="btn btn-sm btn-outline-warning"
-                onClick={async () => {
-                  const success = await copyToClipboard(roomId);
-                  if (!success) {
-                    alert(`Room ID: ${roomId}`);
-                  }
-                }}
-                title="Copy Room ID"
-              >
-                <i className="bi bi-clipboard"></i>
-              </button>
-              <button
-                className="btn btn-sm btn-outline-warning"
-                onClick={async () => {
-                  const success = await copyToClipboard(passcode);
-                  if (!success) {
-                    alert(`Passcode: ${passcode}`);
-                  }
-                }}
-                title="Copy Passcode"
-              >
-                <i className="bi bi-key"></i>
-              </button>
-              <button
-                className="btn btn-sm btn-outline-primary"
-                onClick={async () => {
-                  const shareUrl = `${window.location.origin}/room/${roomId}`;
-                  const success = await copyToClipboard(shareUrl);
-                  if (!success) {
-                    alert(`Share URL: ${shareUrl}`);
-                  }
-                }}
-                title="Copy Share Link"
-              >
-                <i className="bi bi-link"></i>
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
       
@@ -563,13 +503,13 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
           <div>
             <h5 className="mb-1">
               <i className="bi bi-chat-dots-fill text-primary me-2"></i>
-              Room: {roomId}
+              {t('chatRoom.room')}: {roomId}
             </h5>
             <small className="text-secondary">
-              {(users?.length || 0) + 1} participant{(users?.length || 0) !== 0 ? 's' : ''}
+              {(users?.length || 0) + 1} {(users?.length || 0) + 1 === 1 ? t('chatRoom.participant') : t('chatRoom.participants')}
               <span className="d-block">
                 <i className="bi bi-people-fill me-1"></i>
-                {userName} (You){users && users.length > 0 && ` + ${users.length} other${users.length > 1 ? 's' : ''}`}
+                {userName} ({t('chatRoom.you')}){users && users.length > 0 && ` + ${users.length} ${users.length > 1 ? t('chatRoom.others') : t('chatRoom.other')}`}
               </span>
             </small>
           </div>
@@ -608,7 +548,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
               {(!messages || messages.length === 0) ? (
                 <div className="text-center text-muted py-5">
                   <i className="bi bi-chat-dots" style={{ fontSize: '3rem' }}></i>
-                  <p className="mt-3">No messages yet. Start the conversation!</p>
+                  <p className="mt-3">{t('chatRoom.noMessages')}</p>
                 </div>
               ) : (
                 messages && messages.map((message, index) => {
@@ -644,7 +584,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
                   className="form-control"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
+                  placeholder={t('chatRoom.typeMessage')}
                   onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                 />
                 <button
@@ -663,17 +603,17 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
           <div className="glass-morphism p-3 mb-3">
             <h6 className="mb-3">
               <i className="bi bi-people-fill me-2"></i>
-              Participants
+              {t('chatRoom.participants')}
             </h6>
             <div className="list-group">
               {/* Current user (owner) - Single entry */}
               <div className="list-group-item bg-transparent text-white border-secondary">
                 <i className="bi bi-person-circle me-2"></i>
                 {userName}
-                <span className="badge bg-primary ms-2">You</span>
-                {isOwner && <span className="badge bg-warning ms-1">Host</span>}
+                <span className="badge bg-primary ms-2">{t('chatRoom.you')}</span>
+                {isOwner && <span className="badge bg-warning ms-1">{t('chatRoom.host')}</span>}
               </div>
-              
+
               {/* Other users */}
               {users && users.map((user, index) => {
                 console.log(`🧑 User ${index} in list:`, user);
@@ -686,7 +626,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
                   >
                     <i className="bi bi-person-circle me-2"></i>
                     {user?.name || 'Unknown User'}
-                    {user?.isHost && <span className="badge bg-warning ms-2">Host</span>}
+                    {user?.isHost && <span className="badge bg-warning ms-2">{t('chatRoom.host')}</span>}
                   </div>
                 );
               })}
@@ -697,7 +637,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
             <div className="glass-morphism p-3">
               <h6 className="mb-3">
                 <i className="bi bi-camera-video me-2"></i>
-                {callState.isCalling ? 'Calling...' : 'In Call'}
+                {callState.isCalling ? t('chatRoom.calling') : t('chatRoom.inCall')}
               </h6>
               
               <div className="video-container mb-2" style={{ height: '150px' }}>
@@ -729,23 +669,23 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         <div className="position-fixed top-50 start-50 translate-middle glass-morphism p-4" style={{ zIndex: 1000 }}>
           <h6 className="mb-3">
             <i className="bi bi-telephone-fill me-2"></i>
-            Incoming {incomingCall.callType} call
+            {t('chatRoom.incomingCall')} {incomingCall.callType} {t('chatRoom.call')}
           </h6>
-          <p className="mb-3">From: {incomingCall.fromUser.name}</p>
+          <p className="mb-3">{t('chatRoom.from')}: {incomingCall.fromUser.name}</p>
           <div className="d-flex gap-2">
             <button
               className="btn btn-success"
               onClick={acceptCall}
             >
               <i className="bi bi-telephone-fill me-1"></i>
-              Accept
+              {t('chatRoom.accept')}
             </button>
             <button
               className="btn btn-danger"
               onClick={rejectCall}
             >
               <i className="bi bi-telephone-x-fill me-1"></i>
-              Reject
+              {t('chatRoom.reject')}
             </button>
           </div>
         </div>

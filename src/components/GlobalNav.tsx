@@ -29,12 +29,12 @@ export default function GlobalNav() {
   };
 
   return (
-    <div 
-      className="position-fixed d-flex gap-2 align-items-center" 
-      style={{ 
-        top: '20px', 
-        right: '20px', 
-        zIndex: 1050
+    <div
+      className="position-fixed d-flex gap-2 align-items-center"
+      style={{
+        top: '20px',
+        right: '20px',
+        zIndex: 9999
       }}
     >
       {/* Language Switcher */}

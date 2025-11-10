@@ -5,10 +5,6 @@ import { useRouter } from 'next/navigation';
 import { generateRoomId, generatePasscode, generateShareUrl, copyToClipboard } from '@/lib/utils';
 import { initializeSocket } from '@/lib/socket';
 import { useLanguage } from '@/contexts/LanguageContext';
-import LanguageSwitcher from '@/components/LanguageSwitcher';
-import RoomCreationStepDebugger from '@/components/RoomCreationStepDebugger';
-import { testAuthFlow } from '@/lib/authTest';
-import { debugJWT } from '@/lib/jwt-debug';
 
 export default function CreateRoomPage() {
   const [userName, setUserName] = useState('');
@@ -326,7 +322,6 @@ export default function CreateRoomPage() {
 
   return (
     <>
-      <RoomCreationStepDebugger />
       <div className="min-h-screen d-flex align-items-center justify-content-center p-4" style={{ marginTop: '20vh' }}>
         <div className="glass-morphism p-5" style={{ maxWidth: '500px', width: '100%' }}>
           <div className="d-flex justify-content-between align-items-center mb-4">

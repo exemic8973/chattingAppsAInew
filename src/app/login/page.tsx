@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import AuthDebug from '@/components/AuthDebug';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function LoginPage() {
@@ -58,7 +57,6 @@ export default function LoginPage() {
 
   return (
     <ErrorBoundary>
-      <AuthDebug />
       <div className="min-h-screen d-flex align-items-center justify-content-center p-4" style={{ marginTop: '20vh' }}>
         <div className="glass-morphism p-5" style={{ maxWidth: '400px', width: '100%' }}>
           <div className="text-center mb-4">

@@ -178,6 +178,10 @@ nextApp.prepare().then(() => {
       }
       console.log('✅ Passcode valid for room:', roomId);
 
+      // 🔥 CRITICAL FIX: Join socket to room IMMEDIATELY so it receives all broadcasts
+      socket.join(roomId);
+      console.log('🔗 Socket joined room:', roomId);
+
       // 🔥 CRITICAL FIX: Use persistent user ID from client to prevent duplicates on reconnect
       const userId = socket.user ? socket.user.id : (persistentUserId || `guest-${socket.id}`);
       console.log('👤 User ID for joining:', userId);
@@ -208,7 +212,7 @@ nextApp.prepare().then(() => {
           })),
           messages: room.messages || []
         });
-        socket.join(roomId);
+        // socket.join(roomId) removed - already joined at line 182
         console.log('✅ Existing participant rejoined room:', roomId);
         return;
       }
@@ -223,7 +227,7 @@ nextApp.prepare().then(() => {
       };
 
       room.participants.push(participant);
-      socket.join(roomId);
+      // socket.join(roomId) removed - already joined at line 182
 
       if (!room.messages) {
         room.messages = [];
