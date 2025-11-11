@@ -363,11 +363,12 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
         }
-        // Update state to show we're in a call
+        // Update state to show we're in a call - preserve localStream!
         setCallState(prev => ({
           ...prev,
           isCalling: false,
-          isInCall: true
+          isInCall: true,
+          localStream: prev.localStream || stream  // Make sure we keep the local stream
         }));
       });
 
@@ -458,15 +459,32 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
   const toggleMute = () => {
     console.log('🎤 Toggle mute called');
+    console.log('🎤 Call state:', callState);
 
-    if (!webrtcManager.current) {
-      console.error('❌ WebRTC manager not available');
-      return;
+    // Try multiple sources for the stream
+    let localStream: MediaStream | null = null;
+
+    // Method 1: From call state
+    if (callState.localStream) {
+      console.log('✅ Got stream from callState');
+      localStream = callState.localStream;
+    }
+    // Method 2: From WebRTC manager
+    else if (webrtcManager.current) {
+      const managerStream = webrtcManager.current.getLocalStream();
+      if (managerStream) {
+        console.log('✅ Got stream from WebRTC manager');
+        localStream = managerStream;
+      }
+    }
+    // Method 3: From video element
+    else if (localVideoRef.current && localVideoRef.current.srcObject) {
+      console.log('✅ Got stream from video element');
+      localStream = localVideoRef.current.srcObject as MediaStream;
     }
 
-    const localStream = webrtcManager.current.getLocalStream();
     if (!localStream) {
-      console.error('❌ No local stream available');
+      console.error('❌ No local stream available from any source');
       return;
     }
 
@@ -491,20 +509,37 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
   const toggleVideo = () => {
     console.log('📹 Toggle video called');
-
-    if (!webrtcManager.current) {
-      console.error('❌ WebRTC manager not available');
-      return;
-    }
+    console.log('📹 Call state:', callState);
 
     if (callState.callType !== 'video') {
       console.warn('⚠️ Not a video call, ignoring video toggle');
       return;
     }
 
-    const localStream = webrtcManager.current.getLocalStream();
+    // Try multiple sources for the stream
+    let localStream: MediaStream | null = null;
+
+    // Method 1: From call state
+    if (callState.localStream) {
+      console.log('✅ Got stream from callState');
+      localStream = callState.localStream;
+    }
+    // Method 2: From WebRTC manager
+    else if (webrtcManager.current) {
+      const managerStream = webrtcManager.current.getLocalStream();
+      if (managerStream) {
+        console.log('✅ Got stream from WebRTC manager');
+        localStream = managerStream;
+      }
+    }
+    // Method 3: From video element
+    else if (localVideoRef.current && localVideoRef.current.srcObject) {
+      console.log('✅ Got stream from video element');
+      localStream = localVideoRef.current.srcObject as MediaStream;
+    }
+
     if (!localStream) {
-      console.error('❌ No local stream available');
+      console.error('❌ No local stream available from any source');
       return;
     }
 
