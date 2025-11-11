@@ -457,31 +457,74 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
   };
 
   const toggleMute = () => {
-    if (!webrtcManager.current) return;
+    console.log('🎤 Toggle mute called');
+
+    if (!webrtcManager.current) {
+      console.error('❌ WebRTC manager not available');
+      return;
+    }
 
     const localStream = webrtcManager.current.getLocalStream();
-    if (localStream) {
-      const audioTracks = localStream.getAudioTracks();
-      audioTracks.forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsMuted(!audioTracks[0]?.enabled);
-      console.log('🔇 Audio', audioTracks[0]?.enabled ? 'unmuted' : 'muted');
+    if (!localStream) {
+      console.error('❌ No local stream available');
+      return;
     }
+
+    const audioTracks = localStream.getAudioTracks();
+    console.log('🎤 Audio tracks found:', audioTracks.length);
+
+    if (audioTracks.length === 0) {
+      console.error('❌ No audio tracks in stream');
+      return;
+    }
+
+    audioTracks.forEach((track, index) => {
+      const oldState = track.enabled;
+      track.enabled = !track.enabled;
+      console.log(`🎤 Track ${index} (${track.label}): ${oldState} → ${track.enabled}`);
+    });
+
+    const newMutedState = !audioTracks[0].enabled;
+    setIsMuted(newMutedState);
+    console.log('🔇 Mute state updated:', newMutedState ? 'MUTED' : 'UNMUTED');
   };
 
   const toggleVideo = () => {
-    if (!webrtcManager.current || callState.callType !== 'video') return;
+    console.log('📹 Toggle video called');
+
+    if (!webrtcManager.current) {
+      console.error('❌ WebRTC manager not available');
+      return;
+    }
+
+    if (callState.callType !== 'video') {
+      console.warn('⚠️ Not a video call, ignoring video toggle');
+      return;
+    }
 
     const localStream = webrtcManager.current.getLocalStream();
-    if (localStream) {
-      const videoTracks = localStream.getVideoTracks();
-      videoTracks.forEach(track => {
-        track.enabled = !track.enabled;
-      });
-      setIsVideoOff(!videoTracks[0]?.enabled);
-      console.log('📹 Video', videoTracks[0]?.enabled ? 'on' : 'off');
+    if (!localStream) {
+      console.error('❌ No local stream available');
+      return;
     }
+
+    const videoTracks = localStream.getVideoTracks();
+    console.log('📹 Video tracks found:', videoTracks.length);
+
+    if (videoTracks.length === 0) {
+      console.error('❌ No video tracks in stream');
+      return;
+    }
+
+    videoTracks.forEach((track, index) => {
+      const oldState = track.enabled;
+      track.enabled = !track.enabled;
+      console.log(`📹 Track ${index} (${track.label}): ${oldState} → ${track.enabled}`);
+    });
+
+    const newVideoOffState = !videoTracks[0].enabled;
+    setIsVideoOff(newVideoOffState);
+    console.log('📹 Video state updated:', newVideoOffState ? 'OFF' : 'ON');
   };
 
   return (

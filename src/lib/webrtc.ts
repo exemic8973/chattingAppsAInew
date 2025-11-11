@@ -116,6 +116,20 @@ export class WebRTCManager {
       throw new Error('Your browser does not support media devices. Please use a modern browser like Chrome, Firefox, or Edge.');
     }
 
+    // 🔥 CRITICAL FIX: Stop existing stream before creating new one
+    if (this.localStream) {
+      console.log('🧹 Cleaning up existing local stream before creating new one...');
+      this.localStream.getTracks().forEach(track => {
+        console.log(`  Stopping ${track.kind} track:`, track.label);
+        track.stop();
+      });
+      this.localStream = null;
+
+      // Give the browser time to release the devices
+      console.log('⏳ Waiting for devices to be released...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
     // Log available devices for debugging
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
