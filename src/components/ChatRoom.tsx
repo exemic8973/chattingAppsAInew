@@ -674,7 +674,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
             {callState.isInCall && (
               <button
                 className="btn btn-danger"
-                onClick={endCall}
+                onClick={() => endCall()}
               >
                 <i className="bi bi-telephone-x-fill"></i>
               </button>
