@@ -342,7 +342,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       if (!webrtcManager.current) return;
 
       const stream = await webrtcManager.current.createLocalStream(callType === 'video');
-      
+
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
@@ -358,9 +358,10 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       socket.emit('start-call', { roomId, callType });
 
       await webrtcManager.current.initiateCall(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error starting call:', error);
-      alert('Failed to start call. Please check camera/microphone permissions.');
+      const errorMessage = error?.message || 'Failed to start call. Please check camera/microphone permissions.';
+      alert(errorMessage);
     }
   };
 
@@ -369,7 +370,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
     try {
       const stream = await webrtcManager.current.createLocalStream(incomingCall.callType === 'video');
-      
+
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
       }
@@ -393,9 +394,11 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       socket.emit('accept-call', { roomId, targetUserId: incomingCall.fromUser.id });
 
       setIncomingCall(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error accepting call:', error);
-      alert('Failed to accept call. Please check camera/microphone permissions.');
+      const errorMessage = error?.message || 'Failed to accept call. Please check camera/microphone permissions.';
+      alert(errorMessage);
+      setIncomingCall(null);
     }
   };
 

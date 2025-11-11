@@ -48,6 +48,7 @@ export class WebRTCManager {
 
   async createLocalStream(video: boolean = true): Promise<MediaStream> {
     try {
+      // Try with ideal constraints first
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: video ? {
           width: { ideal: 1280 },
@@ -56,9 +57,38 @@ export class WebRTCManager {
         audio: true,
       });
       return this.localStream;
-    } catch (error) {
-      console.error('Error accessing media devices:', error);
-      throw error;
+    } catch (error: any) {
+      console.error('Error accessing media devices with ideal constraints:', error);
+
+      // If video is requested and failed, try with basic constraints
+      if (video) {
+        try {
+          console.log('Retrying with basic video constraints...');
+          this.localStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: true,
+          });
+          return this.localStream;
+        } catch (fallbackError: any) {
+          console.error('Error with basic video constraints:', fallbackError);
+
+          // If still failing, try audio-only
+          try {
+            console.log('Video not available, falling back to audio-only...');
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+              video: false,
+              audio: true,
+            });
+            return this.localStream;
+          } catch (audioError: any) {
+            console.error('Error accessing audio:', audioError);
+            throw new Error('No camera or microphone found. Please check your device permissions and hardware.');
+          }
+        }
+      } else {
+        // For audio-only calls, just throw the error with a helpful message
+        throw new Error('No microphone found. Please check your device permissions and ensure a microphone is connected.');
+      }
     }
   }
 
