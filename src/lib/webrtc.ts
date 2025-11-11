@@ -5,6 +5,7 @@ export class WebRTCManager {
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null;
+  private onSignalCallback: ((signalData: any) => void) | null = null;
 
   constructor() {
     this.setupPeer();
@@ -19,6 +20,9 @@ export class WebRTCManager {
 
     this.peer.on('signal', (data) => {
       console.log('Signal data:', data);
+      if (this.onSignalCallback) {
+        this.onSignalCallback(data);
+      }
     });
 
     this.peer.on('stream', (stream) => {
@@ -71,6 +75,9 @@ export class WebRTCManager {
 
     this.peer.on('signal', (data) => {
       console.log('Signal data to send:', data);
+      if (this.onSignalCallback) {
+        this.onSignalCallback(data);
+      }
     });
 
     this.peer.on('stream', (stream) => {
@@ -113,6 +120,10 @@ export class WebRTCManager {
     if (this.remoteStream) {
       callback(this.remoteStream);
     }
+  }
+
+  onSignal(callback: (signalData: any) => void): void {
+    this.onSignalCallback = callback;
   }
 
   getLocalStream(): MediaStream | null {

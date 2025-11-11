@@ -49,6 +49,15 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
     webrtcManager.current = new WebRTCManager();
 
+    // Set up WebRTC signal handler to relay signals via Socket.IO
+    webrtcManager.current.onSignal((signalData) => {
+      console.log('📡 Emitting WebRTC signal to server:', signalData);
+      socket.emit('webrtc-signal', {
+        roomId,
+        signalData
+      });
+    });
+
     // 🔐 CRITICAL FIX: Authenticate socket before joining room
     const authenticateSocket = (): Promise<void> => {
       return new Promise((resolve, reject) => {
@@ -381,7 +390,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       });
 
       const socket = getSocket();
-      socket.emit('call-accepted', { roomId, targetUserId: incomingCall.fromUser.id });
+      socket.emit('accept-call', { roomId, targetUserId: incomingCall.fromUser.id });
 
       setIncomingCall(null);
     } catch (error) {

@@ -301,6 +301,99 @@ nextApp.prepare().then(() => {
       io.to(roomId).emit('new-message', chatMessage);
     });
 
+    // WebRTC signaling events
+    socket.on('start-call', (data) => {
+      const { roomId, callType } = data;
+      console.log(`📞 Starting ${callType} call in room:`, roomId);
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const caller = room.participants.find(p => p.socketId === socket.id);
+      if (!caller) return;
+
+      // Notify all other participants in the room about incoming call
+      socket.to(roomId).emit('incoming-call', {
+        callType,
+        fromUser: {
+          id: caller.id,
+          name: caller.name
+        }
+      });
+    });
+
+    socket.on('accept-call', (data) => {
+      const { roomId, targetUserId } = data;
+      console.log('✅ Call accepted in room:', roomId);
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const accepter = room.participants.find(p => p.socketId === socket.id);
+      if (!accepter) return;
+
+      // Find the target user's socket
+      const targetParticipant = room.participants.find(p => p.id === targetUserId);
+      if (targetParticipant) {
+        io.to(targetParticipant.socketId).emit('call-accepted', {
+          fromUser: {
+            id: accepter.id,
+            name: accepter.name
+          }
+        });
+      }
+    });
+
+    socket.on('call-rejected', (data) => {
+      const { roomId, targetUserId } = data;
+      console.log('❌ Call rejected in room:', roomId);
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      // Find the target user's socket
+      const targetParticipant = room.participants.find(p => p.id === targetUserId);
+      if (targetParticipant) {
+        io.to(targetParticipant.socketId).emit('call-rejected');
+      }
+    });
+
+    socket.on('end-call', (data) => {
+      const { roomId } = data;
+      console.log('📴 Call ended in room:', roomId);
+
+      // Notify all other participants in the room
+      socket.to(roomId).emit('call-ended');
+    });
+
+    socket.on('webrtc-signal', (data) => {
+      const { roomId, signalData, targetUserId } = data;
+      console.log('🔄 WebRTC signal relay in room:', roomId);
+
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const sender = room.participants.find(p => p.socketId === socket.id);
+      if (!sender) return;
+
+      if (targetUserId) {
+        // Send to specific user
+        const targetParticipant = room.participants.find(p => p.id === targetUserId);
+        if (targetParticipant) {
+          io.to(targetParticipant.socketId).emit('webrtc-signal', {
+            signalData,
+            fromUserId: sender.id
+          });
+        }
+      } else {
+        // Broadcast to all other participants in the room
+        socket.to(roomId).emit('webrtc-signal', {
+          signalData,
+          fromUserId: sender.id
+        });
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('🔌 User disconnected:', socket.id);
       if (socket.userId) {
