@@ -29,6 +29,8 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     fromUser: User;
     callType: 'voice' | 'video';
   } | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -443,10 +445,42 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       callType: null,
     });
 
+    // Reset audio/video controls
+    setIsMuted(false);
+    setIsVideoOff(false);
+
     // Only emit to server if we're the one ending the call, not when receiving end-call event
     if (emitToServer) {
       const socket = getSocket();
       socket.emit('end-call', { roomId });
+    }
+  };
+
+  const toggleMute = () => {
+    if (!webrtcManager.current) return;
+
+    const localStream = webrtcManager.current.getLocalStream();
+    if (localStream) {
+      const audioTracks = localStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setIsMuted(!audioTracks[0]?.enabled);
+      console.log('🔇 Audio', audioTracks[0]?.enabled ? 'unmuted' : 'muted');
+    }
+  };
+
+  const toggleVideo = () => {
+    if (!webrtcManager.current || callState.callType !== 'video') return;
+
+    const localStream = webrtcManager.current.getLocalStream();
+    if (localStream) {
+      const videoTracks = localStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = !track.enabled;
+      });
+      setIsVideoOff(!videoTracks[0]?.enabled);
+      console.log('📹 Video', videoTracks[0]?.enabled ? 'on' : 'off');
     }
   };
 
@@ -681,13 +715,36 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
               </div>
               
               {callState.isInCall && (
-                <div className="video-container" style={{ height: '150px' }}>
+                <div className="video-container mb-3" style={{ height: '150px' }}>
                   <video
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
                     className="w-100 h-100"
                   />
+                </div>
+              )}
+
+              {/* Audio/Video Controls */}
+              {callState.isInCall && (
+                <div className="d-flex gap-2 justify-content-center">
+                  <button
+                    className={`btn ${isMuted ? 'btn-danger' : 'btn-secondary'}`}
+                    onClick={toggleMute}
+                    title={isMuted ? t('chatRoom.unmute') : t('chatRoom.mute')}
+                  >
+                    <i className={`bi ${isMuted ? 'bi-mic-mute-fill' : 'bi-mic-fill'}`}></i>
+                  </button>
+
+                  {callState.callType === 'video' && (
+                    <button
+                      className={`btn ${isVideoOff ? 'btn-danger' : 'btn-secondary'}`}
+                      onClick={toggleVideo}
+                      title={isVideoOff ? t('chatRoom.videoOn') : t('chatRoom.videoOff')}
+                    >
+                      <i className={`bi ${isVideoOff ? 'bi-camera-video-off-fill' : 'bi-camera-video-fill'}`}></i>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

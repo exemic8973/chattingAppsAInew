@@ -87,6 +87,10 @@ export const translations = {
     'chatRoom.copyRoomId': 'Copy Room ID',
     'chatRoom.copyPasscode': 'Copy Passcode',
     'chatRoom.copyShareLink': 'Copy Share Link',
+    'chatRoom.mute': 'Mute',
+    'chatRoom.unmute': 'Unmute',
+    'chatRoom.videoOff': 'Turn Video Off',
+    'chatRoom.videoOn': 'Turn Video On',
     
     // Global
     'logout': 'Logout',
@@ -207,6 +211,10 @@ export const translations = {
     'chatRoom.copyRoomId': '复制房间ID',
     'chatRoom.copyPasscode': '复制密码',
     'chatRoom.copyShareLink': '复制分享链接',
+    'chatRoom.mute': '静音',
+    'chatRoom.unmute': '取消静音',
+    'chatRoom.videoOff': '关闭视频',
+    'chatRoom.videoOn': '开启视频',
     
     // Global
     'logout': '退出',

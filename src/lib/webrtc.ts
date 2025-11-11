@@ -171,6 +171,11 @@ export class WebRTCManager {
       }
 
       if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+        // Check if this is a "device in use" or "device not accessible" error
+        if (error.message && error.message.toLowerCase().includes('not found')) {
+          throw new Error('Cannot access camera/microphone. Please check:\n1. Close other apps that might be using your camera/microphone (Zoom, Teams, Discord, Skype, etc.)\n2. Make sure your devices are properly connected\n3. Try refreshing the page and allowing permissions when prompted\n4. Check if your camera/microphone are working in other applications');
+        }
+
         if (video) {
           throw new Error('No camera or microphone found. Please connect a camera and microphone, then try again.');
         } else {
