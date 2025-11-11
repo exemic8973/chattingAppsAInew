@@ -221,7 +221,8 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     });
 
     socket.on('call-ended', () => {
-      endCall();
+      // Don't emit back to server - we're receiving the end notification
+      endCall(false);
     });
 
     socket.on('webrtc-signal', async ({ signalData, fromUserId }) => {
@@ -424,7 +425,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     setIncomingCall(null);
   };
 
-  const endCall = () => {
+  const endCall = (emitToServer: boolean = true) => {
     if (webrtcManager.current) {
       webrtcManager.current.cleanup();
     }
@@ -442,8 +443,11 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       callType: null,
     });
 
-    const socket = getSocket();
-    socket.emit('end-call', { roomId });
+    // Only emit to server if we're the one ending the call, not when receiving end-call event
+    if (emitToServer) {
+      const socket = getSocket();
+      socket.emit('end-call', { roomId });
+    }
   };
 
   return (
