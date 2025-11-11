@@ -113,7 +113,11 @@ export const translations = {
     'error.unauthorized': 'Unauthorized access',
     'error.roomNotFound': 'Room not found',
     'error.invalidPasscode': 'Invalid passcode',
-    'error.authenticationFailed': 'Authentication failed. Please check your credentials.'
+    'error.authenticationFailed': 'Authentication failed. Please check your credentials.',
+    'error.mediaPermissionDenied': 'Permission denied. Please allow camera/microphone access when your browser asks.',
+    'error.noMediaDevices': 'No camera or microphone found. Please connect your devices and try again.',
+    'error.mediaDeviceInUse': 'Cannot access camera/microphone. They might be in use by another application.',
+    'error.browserNotSupported': 'Your browser does not support media devices. Please use Chrome, Firefox, or Edge.'
   },
   zh: {
     // Authentication
@@ -229,6 +233,10 @@ export const translations = {
     'error.unauthorized': '未授权访问',
     'error.roomNotFound': '找不到房间',
     'error.invalidPasscode': '密码无效',
-    'error.authenticationFailed': '身份验证失败。请检查您的凭据。'
+    'error.authenticationFailed': '身份验证失败。请检查您的凭据。',
+    'error.mediaPermissionDenied': '权限被拒绝。请在浏览器询问时允许访问摄像头/麦克风。',
+    'error.noMediaDevices': '找不到摄像头或麦克风。请连接您的设备后重试。',
+    'error.mediaDeviceInUse': '无法访问摄像头/麦克风。它们可能正被其他应用程序使用。',
+    'error.browserNotSupported': '您的浏览器不支持媒体设备。请使用 Chrome、Firefox 或 Edge。'
   }
 };
