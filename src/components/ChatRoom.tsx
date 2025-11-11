@@ -354,6 +354,20 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         localStream: stream
       });
 
+      // CRITICAL FIX: Set up remote stream callback BEFORE initiating call
+      webrtcManager.current.onRemoteStream((remoteStream) => {
+        console.log('📺 Received remote stream');
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStream;
+        }
+        // Update state to show we're in a call
+        setCallState(prev => ({
+          ...prev,
+          isCalling: false,
+          isInCall: true
+        }));
+      });
+
       const socket = getSocket();
       socket.emit('start-call', { roomId, callType });
 

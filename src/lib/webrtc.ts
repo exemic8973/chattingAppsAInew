@@ -7,6 +7,13 @@ export class WebRTCManager {
   private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null;
   private onSignalCallback: ((signalData: any) => void) | null = null;
 
+  // STUN servers for NAT traversal (free Google STUN servers)
+  private readonly iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' }
+  ];
+
   constructor() {
     this.setupPeer();
   }
@@ -14,8 +21,11 @@ export class WebRTCManager {
   private setupPeer() {
     this.peer = new SimplePeer({
       initiator: false,
-      trickle: false,
+      trickle: true, // Enable trickle ICE for faster connection
       stream: this.localStream || undefined,
+      config: {
+        iceServers: this.iceServers
+      }
     });
 
     this.peer.on('signal', (data) => {
@@ -48,13 +58,21 @@ export class WebRTCManager {
 
   async createLocalStream(video: boolean = true): Promise<MediaStream> {
     try {
-      // Try with ideal constraints first
+      // Optimized constraints for quality and bandwidth
       this.localStream = await navigator.mediaDevices.getUserMedia({
         video: video ? {
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { min: 640, ideal: 1280, max: 1920 },
+          height: { min: 480, ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 30 }, // 30fps is sufficient for calls
+          facingMode: 'user'
         } : false,
-        audio: true,
+        audio: {
+          echoCancellation: true,     // Remove echo
+          noiseSuppression: true,      // Remove background noise
+          autoGainControl: true,       // Normalize volume
+          sampleRate: 48000,          // High quality audio (Opus ideal rate)
+          channelCount: 1             // Mono is enough for calls, saves bandwidth
+        }
       });
       return this.localStream;
     } catch (error: any) {
@@ -65,8 +83,17 @@ export class WebRTCManager {
         try {
           console.log('Retrying with basic video constraints...');
           this.localStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 24 }
+            },
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1
+            }
           });
           return this.localStream;
         } catch (fallbackError: any) {
@@ -77,7 +104,13 @@ export class WebRTCManager {
             console.log('Video not available, falling back to audio-only...');
             this.localStream = await navigator.mediaDevices.getUserMedia({
               video: false,
-              audio: true,
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                sampleRate: 48000,
+                channelCount: 1
+              }
             });
             return this.localStream;
           } catch (audioError: any) {
@@ -99,9 +132,24 @@ export class WebRTCManager {
 
     this.peer = new SimplePeer({
       initiator: isInitiator,
-      trickle: false,
+      trickle: true, // Enable trickle ICE for faster connection
       stream: this.localStream || undefined,
+      config: {
+        iceServers: this.iceServers
+      },
+      // Optimize for better codec selection
+      offerOptions: {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      },
+      answerOptions: {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      }
     });
+
+    // Apply bandwidth and codec optimizations after peer is created
+    this.optimizePeerConnection();
 
     this.peer.on('signal', (data) => {
       console.log('Signal data to send:', data);
@@ -156,6 +204,48 @@ export class WebRTCManager {
     this.onSignalCallback = callback;
   }
 
+  private optimizePeerConnection(): void {
+    if (!this.peer || !(this.peer as any)._pc) return;
+
+    const pc = (this.peer as any)._pc as RTCPeerConnection;
+
+    // Optimize bandwidth for video (save data while maintaining quality)
+    const senders = pc.getSenders();
+    senders.forEach(sender => {
+      if (sender.track?.kind === 'video') {
+        const parameters = sender.getParameters();
+        if (!parameters.encodings) {
+          parameters.encodings = [{}];
+        }
+        // Limit max bitrate to 1.5 Mbps for video (good quality, reasonable data)
+        parameters.encodings[0].maxBitrate = 1500000; // 1.5 Mbps
+        parameters.encodings[0].maxFramerate = 30;
+        sender.setParameters(parameters).catch(err =>
+          console.warn('Failed to set video parameters:', err)
+        );
+      } else if (sender.track?.kind === 'audio') {
+        const parameters = sender.getParameters();
+        if (!parameters.encodings) {
+          parameters.encodings = [{}];
+        }
+        // Limit audio bitrate to 64 kbps (excellent quality for voice)
+        parameters.encodings[0].maxBitrate = 64000; // 64 kbps
+        sender.setParameters(parameters).catch(err =>
+          console.warn('Failed to set audio parameters:', err)
+        );
+      }
+    });
+
+    // Monitor connection quality
+    pc.addEventListener('iceconnectionstatechange', () => {
+      console.log('ICE connection state:', pc.iceConnectionState);
+    });
+
+    pc.addEventListener('connectionstatechange', () => {
+      console.log('Connection state:', pc.connectionState);
+    });
+  }
+
   getLocalStream(): MediaStream | null {
     return this.localStream;
   }
@@ -177,5 +267,6 @@ export class WebRTCManager {
 
     this.remoteStream = null;
     this.onRemoteStreamCallback = null;
+    this.onSignalCallback = null; // Prevent memory leaks
   }
 }
