@@ -2,10 +2,15 @@ const { Pool } = require('pg');
 
 // PostgreSQL connection configuration
 // Priority: DATABASE_URL > individual env vars > defaults
+const dbHost = process.env.PGHOST || process.env.DB_HOST || 'localhost';
+const isLocalhost = dbHost === 'localhost' || dbHost === '127.0.0.1' ||
+                    process.env.DATABASE_URL?.includes('localhost') ||
+                    process.env.DATABASE_URL?.includes('127.0.0.1');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   // Fallback to individual env vars if DATABASE_URL not set
-  host: process.env.PGHOST || process.env.DB_HOST || 'localhost',
+  host: dbHost,
   port: parseInt(process.env.PGPORT || process.env.DB_PORT || '5432'),
   database: process.env.PGDATABASE || process.env.DB_NAME || 'chatapp',
   user: process.env.PGUSER || process.env.DB_USER || 'postgres',
@@ -14,8 +19,8 @@ const pool = new Pool({
   max: 20, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  // SSL configuration for production (Zeabur, Heroku, etc.)
-  ssl: process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL?.includes('localhost')
+  // SSL configuration: only enable for production and non-localhost connections
+  ssl: process.env.NODE_ENV === 'production' && !isLocalhost
     ? { rejectUnauthorized: false }
     : false
 });
