@@ -6,18 +6,34 @@ class SocketManager {
   
   getSocket(userId: string): Socket {
     if (!this.sockets.has(userId)) {
-      // Use environment variable or fallback to localhost:3000 (integrated server)
-      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+      // Automatically detect protocol and use same as current page
+      let socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
+
+      if (!socketUrl) {
+        // If no env var, auto-detect protocol from current page
+        if (typeof window !== 'undefined') {
+          const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+          const host = window.location.host;
+          socketUrl = `${protocol}//${host}`;
+        } else {
+          // SSR fallback
+          socketUrl = 'http://localhost:3000';
+        }
+      }
+
       console.log(`🔌 Creating new socket for user ${userId} connecting to:`, socketUrl);
-      console.log(`🔍 NEXT_PUBLIC_SOCKET_URL from env:`, process.env.NEXT_PUBLIC_SOCKET_URL || 'NOT SET');
-      
+      console.log(`🔍 NEXT_PUBLIC_SOCKET_URL from env:`, process.env.NEXT_PUBLIC_SOCKET_URL || 'AUTO-DETECTED');
+      console.log(`🔒 Protocol:`, socketUrl.startsWith('https') ? 'HTTPS (Secure)' : 'HTTP');
+
       const socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         timeout: 10000,
         reconnection: true,
         reconnectionAttempts: 3,
         reconnectionDelay: 1000,
-        // Remove forceNew to allow proper connection management
+        // Force secure connection on HTTPS
+        secure: socketUrl.startsWith('https'),
+        rejectUnauthorized: false, // Allow self-signed certs in dev
       });
 
       socket.on('connect', () => {
