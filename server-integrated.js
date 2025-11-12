@@ -53,6 +53,10 @@ const createRoom = (roomId, passcode, creator, creatorName) => {
 
 nextApp.prepare().then(() => {
   const app = express();
+
+  // Trust proxy - CRITICAL for Zeabur/reverse proxy platforms
+  app.set('trust proxy', 1);
+
   const httpServer = createServer(app);
 
   // Don't use global middleware that consumes request body
