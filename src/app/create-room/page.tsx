@@ -112,7 +112,17 @@ export default function CreateRoomPage() {
         if (isProcessed) return;
         isProcessed = true;
         console.error('❌ Socket authentication failed:', message, details);
-        
+
+        // Check for JWT signature mismatch - clear old token and redirect to login
+        if (details && (details.includes('invalid signature') || details.includes('jwt malformed'))) {
+          console.log('🔄 Invalid JWT token detected - clearing and redirecting to login');
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          alert('Your session has expired or is invalid. Please log in again.');
+          window.location.href = '/login';
+          return;
+        }
+
         if (message.includes('User not found')) {
           console.log('🔄 User not found in backend - trying to create user from JWT');
           // Try to continue anyway - backend should create user from JWT
@@ -120,10 +130,10 @@ export default function CreateRoomPage() {
           const newRoomId = generateRoomId();
           const newPasscode = generatePasscode();
           console.log(`📍 Fallback: Creating room with ID: ${newRoomId}, passcode: ${newPasscode}`);
-          socket.emit('create-room', { 
+          socket.emit('create-room', {
             roomId: newRoomId,
-            userName: userName, 
-            passcode: newPasscode 
+            userName: userName,
+            passcode: newPasscode
           });
         } else {
           setError(`Authentication failed: ${message}`);

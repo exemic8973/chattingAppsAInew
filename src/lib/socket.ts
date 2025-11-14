@@ -13,11 +13,14 @@ class SocketManager {
         // If no env var, auto-detect protocol from current page
         if (typeof window !== 'undefined') {
           const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-          const host = window.location.host;
-          socketUrl = `${protocol}//${host}`;
+          const hostname = window.location.hostname;
+          // For local development, connect to backend on port 3001
+          // For production, use the same host as frontend
+          const port = hostname === 'localhost' || hostname === '127.0.0.1' ? 3001 : window.location.port;
+          socketUrl = `${protocol}//${hostname}:${port}`;
         } else {
           // SSR fallback
-          socketUrl = 'http://localhost:3000';
+          socketUrl = 'http://localhost:3001';
         }
       }
 

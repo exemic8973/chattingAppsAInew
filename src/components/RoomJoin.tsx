@@ -51,7 +51,8 @@ export default function RoomJoin({ roomId }: RoomJoinProps) {
         });
       }
 
-      socket.emit('join-room', { roomId, passcode, userName });
+  const persistentUserId = localStorage.getItem('socketUserId');
+  socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
 
       socket.on('room-joined', ({ users, messages }) => {
         console.log(`✅ Successfully joined room: ${roomId}`);

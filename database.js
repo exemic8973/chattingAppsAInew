@@ -47,8 +47,8 @@ if (isProduction) {
   // DEVELOPMENT: SQLite
   // ============================================
   const Database = require('better-sqlite3');
-  db = new Database('chat.db');
-  console.log('💾 SQLite database configured (Development): chat.db');
+  db = new Database('chat-new.db');
+  console.log('💾 SQLite database configured (Development): chat-new.db');
 }
 
 // ============================================

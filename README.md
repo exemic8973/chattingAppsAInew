@@ -1,8 +1,8 @@
 # Real-Time Chat Application 💬
 
-A modern, real-time chat application with authentication, private rooms, and WebRTC support, built with Next.js, TypeScript, and Socket.IO.
+A modern, real-time chat application with authentication, private rooms, and **group video broadcasting**, built with Next.js, TypeScript, and Socket.IO.
 
-**Version**: 1.0.0 (First Working Release)
+**Version**: 2.0.0 (Group Broadcasting Release)
 
 ## 🔗 Repository
 
@@ -24,6 +24,19 @@ A modern, real-time chat application with authentication, private rooms, and Web
 - ✅ **Instant Messaging**: Real-time chat with Socket.IO
 - ✅ **Message History**: Previous messages visible to new joiners
 - ✅ **Participant List**: See who's in the room
+
+### 🎙️ Group Video Broadcasting (NEW!)
+- ✅ **Auto-Broadcast**: Host automatically streams when creating room
+- ✅ **No Explicit Calls**: Participants request to join instead
+- ✅ **Call List System**: 
+  - Host invites participants OR
+  - Participants request to join call
+- ✅ **Host Controls**: Mute/unmute and toggle video anytime
+- ✅ **Group Calling**: Multiple participants can join single broadcast
+- ✅ **Per-Remote Peers**: Individual WebRTC connection per participant
+- ✅ **Multi-Video Grid**: Display all participants in grid layout
+- ✅ **Audio Activity Detection**: Visual indicators for who's speaking
+- ✅ **Volume Controls**: Adjust microphone and speaker volumes
 
 ### Multi-Language Support
 - 🌍 **English & Chinese**: Full i18n support

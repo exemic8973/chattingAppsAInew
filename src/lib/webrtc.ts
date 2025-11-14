@@ -1,23 +1,26 @@
 import SimplePeer from 'simple-peer';
 
-export class WebRTCManager {
-  private peer: SimplePeer.Instance | null = null;
-  private localStream: MediaStream | null = null;
-  private remoteStream: MediaStream | null = null;
-  private onRemoteStreamCallback: ((stream: MediaStream) => void) | null = null;
-  private onSignalCallback: ((signalData: any) => void) | null = null;
+type SignalPayload = { to: string; signalData: any };
 
-  // STUN servers for NAT traversal (free Google STUN servers)
+interface PeerWrapper {
+  peer: SimplePeer.Instance;
+  remoteId: string;
+}
+
+export class MultiPeerManager {
+  private peers: Map<string, PeerWrapper> = new Map();
+  private pendingSignals: Map<string, any[]> = new Map();
+  private localStream: MediaStream | null = null;
+  private onSignalCallback: ((payload: SignalPayload) => void) | null = null;
+  private onRemoteStreamCallback: ((remoteId: string, stream: MediaStream) => void) | null = null;
+
+  // STUN servers for NAT traversal (Google public STUN servers)
   private readonly iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' }
   ];
 
-  /**
-   * Check if browser supports media devices and enumerate available devices
-   * @returns Object with device availability and permission status
-   */
   static async checkMediaDeviceSupport(): Promise<{
     supported: boolean;
     hasAudioDevices: boolean;
@@ -26,7 +29,6 @@ export class WebRTCManager {
     videoDevices: MediaDeviceInfo[];
     error?: string;
   }> {
-    // Check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       return {
         supported: false,
@@ -34,19 +36,13 @@ export class WebRTCManager {
         hasVideoDevices: false,
         audioDevices: [],
         videoDevices: [],
-        error: 'Your browser does not support media devices. Please use a modern browser like Chrome, Firefox, or Edge.'
+        error: 'Your browser does not support media devices.'
       };
     }
-
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const audioDevices = devices.filter(d => d.kind === 'audioinput');
       const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-      console.log('📹 Media device check:');
-      console.log(`  Audio devices: ${audioDevices.length}`);
-      console.log(`  Video devices: ${videoDevices.length}`);
-
       return {
         supported: true,
         hasAudioDevices: audioDevices.length > 0,
@@ -55,7 +51,6 @@ export class WebRTCManager {
         videoDevices
       };
     } catch (error: any) {
-      console.error('Error enumerating devices:', error);
       return {
         supported: true,
         hasAudioDevices: false,
@@ -67,353 +62,247 @@ export class WebRTCManager {
     }
   }
 
-  constructor() {
-    this.setupPeer();
-  }
-
-  private setupPeer() {
-    this.peer = new SimplePeer({
-      initiator: false,
-      trickle: true, // Enable trickle ICE for faster connection
-      stream: this.localStream || undefined,
-      config: {
-        iceServers: this.iceServers
-      }
-    });
-
-    this.peer.on('signal', (data) => {
-      console.log('Signal data:', data);
-      if (this.onSignalCallback) {
-        this.onSignalCallback(data);
-      }
-    });
-
-    this.peer.on('stream', (stream) => {
-      this.remoteStream = stream;
-      if (this.onRemoteStreamCallback) {
-        this.onRemoteStreamCallback(stream);
-      }
-    });
-
-    this.peer.on('connect', () => {
-      console.log('Peer connected');
-    });
-
-    this.peer.on('close', () => {
-      console.log('Peer connection closed');
-      this.cleanup();
-    });
-
-    this.peer.on('error', (err) => {
-      console.error('Peer error:', err);
-    });
-  }
-
+  // Create or update local media stream
   async createLocalStream(video: boolean = true): Promise<MediaStream> {
-    // First check if getUserMedia is supported
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      console.error('❌ getUserMedia not supported in this browser');
-      throw new Error('Your browser does not support media devices. Please use a modern browser like Chrome, Firefox, or Edge.');
+      throw new Error('getUserMedia not supported in this browser');
     }
 
-    // 🔥 CRITICAL FIX: Stop existing stream before creating new one
     if (this.localStream) {
-      console.log('🧹 Cleaning up existing local stream before creating new one...');
-      this.localStream.getTracks().forEach(track => {
-        console.log(`  Stopping ${track.kind} track:`, track.label);
-        track.stop();
-      });
+      try {
+        this.localStream.getTracks().forEach(track => track.stop());
+      } catch (e) {
+        console.warn('Error stopping old tracks', e);
+      }
       this.localStream = null;
-
-      // Give the browser time to release the devices
-      console.log('⏳ Waiting for devices to be released...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    // Log available devices for debugging
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioDevices = devices.filter(d => d.kind === 'audioinput');
-      const videoDevices = devices.filter(d => d.kind === 'videoinput');
-      console.log(`📹 Available devices - Audio: ${audioDevices.length}, Video: ${videoDevices.length}`);
-      console.log('Audio devices:', audioDevices.map(d => d.label || 'Unnamed device'));
-      console.log('Video devices:', videoDevices.map(d => d.label || 'Unnamed device'));
-
-      if (audioDevices.length === 0) {
-        console.warn('⚠️ No audio input devices found!');
-      }
-      if (video && videoDevices.length === 0) {
-        console.warn('⚠️ No video input devices found!');
-      }
-    } catch (enumError) {
-      console.warn('Could not enumerate devices:', enumError);
+      await new Promise(r => setTimeout(r, 300));
     }
 
     try {
-      console.log(`🎯 Requesting media stream - Video: ${video}, Audio: true`);
-
-      // Optimized constraints for quality and bandwidth
       this.localStream = await navigator.mediaDevices.getUserMedia({
-        video: video ? {
-          width: { min: 640, ideal: 1280, max: 1920 },
-          height: { min: 480, ideal: 720, max: 1080 },
-          frameRate: { ideal: 30, max: 30 }, // 30fps is sufficient for calls
-          facingMode: 'user'
-        } : false,
-        audio: {
-          echoCancellation: true,     // Remove echo
-          noiseSuppression: true,      // Remove background noise
-          autoGainControl: true,       // Normalize volume
-          sampleRate: 48000,          // High quality audio (Opus ideal rate)
-          channelCount: 1             // Mono is enough for calls, saves bandwidth
-        }
+        video: video ? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } : false,
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
-
-      console.log('✅ Media stream obtained successfully');
-      console.log('Audio tracks:', this.localStream.getAudioTracks().length);
-      console.log('Video tracks:', this.localStream.getVideoTracks().length);
-
+      console.log('✅ Successfully got local media stream (video:', video ? 'yes' : 'no', ')');
       return this.localStream;
-    } catch (error: any) {
-      console.error('❌ Error accessing media devices with ideal constraints:', error);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
-
-      // Check for specific permission errors
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        throw new Error('Permission denied. Please click "Allow" when your browser asks for camera/microphone access, or check your browser settings to enable permissions for this site.');
-      }
-
-      if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        // Check if this is a "device in use" or "device not accessible" error
-        if (error.message && error.message.toLowerCase().includes('not found')) {
-          throw new Error('Cannot access camera/microphone. Please check:\n1. Close other apps that might be using your camera/microphone (Zoom, Teams, Discord, Skype, etc.)\n2. Make sure your devices are properly connected\n3. Try refreshing the page and allowing permissions when prompted\n4. Check if your camera/microphone are working in other applications');
-        }
-
-        if (video) {
-          throw new Error('No camera or microphone found. Please connect a camera and microphone, then try again.');
-        } else {
-          throw new Error('No microphone found. Please connect a microphone, then try again.');
-        }
-      }
-
-      if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        throw new Error('Cannot access camera/microphone. They might be in use by another application. Please close other apps using your camera/microphone and try again.');
-      }
-
-      if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
-        console.log('Constraints too strict, will retry with basic constraints...');
-      } else {
-        // Unknown error, log and continue to fallback
-        console.error('Unknown error type, trying fallback...');
-      }
-
-      // If video is requested and failed, try with basic constraints
-      if (video) {
+    } catch (err: any) {
+      console.error('❌ getUserMedia error:', err.name, err.message);
+      console.error('📍 Full error object:', err);
+      
+      // If video was requested but failed, try audio-only as fallback
+      if (video && err.name !== 'NotAllowedError') {
+        console.log('⚠️ Video failed (err.name=' + err.name + '), attempting audio-only fallback...');
         try {
-          console.log('🔄 Retrying with basic video constraints...');
           this.localStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-              frameRate: { ideal: 24 }
-            },
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              channelCount: 1
-            }
+            video: false,
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
           });
-          console.log('✅ Media stream obtained with basic constraints');
+          console.log('✅ Audio-only stream acquired as fallback');
           return this.localStream;
-        } catch (fallbackError: any) {
-          console.error('❌ Error with basic video constraints:', fallbackError);
-          console.error('Fallback error name:', fallbackError.name);
-          console.error('Fallback error message:', fallbackError.message);
-
-          // If still failing, try audio-only
-          try {
-            console.log('🔄 Video not available, falling back to audio-only...');
-            this.localStream = await navigator.mediaDevices.getUserMedia({
-              video: false,
-              audio: {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-                sampleRate: 48000,
-                channelCount: 1
-              }
-            });
-            console.log('✅ Audio-only stream obtained');
-            return this.localStream;
-          } catch (audioError: any) {
-            console.error('❌ Error accessing audio:', audioError);
-            console.error('Audio error name:', audioError.name);
-            console.error('Audio error message:', audioError.message);
-
-            if (audioError.name === 'NotAllowedError' || audioError.name === 'PermissionDeniedError') {
-              throw new Error('Microphone permission denied. Please:\n1. Click "Allow" when your browser asks for microphone access\n2. Or check your browser settings (usually a camera icon in the address bar)\n3. Make sure microphone permissions are enabled for this site');
-            }
-
-            throw new Error('Cannot access microphone. Please check:\n1. A microphone is connected to your computer\n2. Your browser has permission to use the microphone\n3. The microphone is not being used by another application');
-          }
+        } catch (audioErr: any) {
+          console.error('❌ Audio-only fallback also failed:', audioErr.name, audioErr.message);
+          console.error('📍 Audio error details:', audioErr);
+          throw new Error(`Media unavailable: ${audioErr.message || audioErr.name}`);
         }
-      } else {
-        // For audio-only calls, provide detailed error message
-        console.error('❌ Audio-only call failed on first attempt');
-
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          throw new Error('Microphone permission denied. Please:\n1. Click "Allow" when your browser asks for microphone access\n2. Or check your browser settings (usually a camera icon in the address bar)\n3. Make sure microphone permissions are enabled for this site');
-        }
-
-        throw new Error('Cannot access microphone. Please check:\n1. A microphone is connected to your computer\n2. Your browser has permission to use the microphone\n3. The microphone is not being used by another application');
       }
+      
+      // If permission denied or audio-only also failed, rethrow
+      console.error('🚫 Not attempting fallback - throwing error');
+      throw new Error(`Media unavailable: ${err.message || err.name}`);
     }
-  }
-
-  async initiateCall(isInitiator: boolean, signalData?: any): Promise<void> {
-    if (this.peer) {
-      this.peer.destroy();
-    }
-
-    this.peer = new SimplePeer({
-      initiator: isInitiator,
-      trickle: true, // Enable trickle ICE for faster connection
-      stream: this.localStream || undefined,
-      config: {
-        iceServers: this.iceServers
-      },
-      // Optimize for better codec selection
-      offerOptions: {
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      },
-      answerOptions: {
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      }
-    });
-
-    // Apply bandwidth and codec optimizations after peer is created
-    this.optimizePeerConnection();
-
-    this.peer.on('signal', (data) => {
-      console.log('Signal data to send:', data);
-      if (this.onSignalCallback) {
-        this.onSignalCallback(data);
-      }
-    });
-
-    this.peer.on('stream', (stream) => {
-      this.remoteStream = stream;
-      if (this.onRemoteStreamCallback) {
-        this.onRemoteStreamCallback(stream);
-      }
-    });
-
-    this.peer.on('connect', () => {
-      console.log('Peer connected');
-    });
-
-    this.peer.on('close', () => {
-      console.log('Peer connection closed');
-      this.cleanup();
-    });
-
-    this.peer.on('error', (err) => {
-      console.error('Peer error:', err);
-    });
-
-    if (signalData && !isInitiator) {
-      this.peer.signal(signalData);
-    }
-  }
-
-  signal(data: any): void {
-    if (this.peer) {
-      this.peer.signal(data);
-    }
-  }
-
-  getSignalData(): any {
-    return this.peer ? (this.peer as any)._lastSignal : null;
-  }
-
-  onRemoteStream(callback: (stream: MediaStream) => void): void {
-    this.onRemoteStreamCallback = callback;
-    if (this.remoteStream) {
-      callback(this.remoteStream);
-    }
-  }
-
-  onSignal(callback: (signalData: any) => void): void {
-    this.onSignalCallback = callback;
-  }
-
-  private optimizePeerConnection(): void {
-    if (!this.peer || !(this.peer as any)._pc) return;
-
-    const pc = (this.peer as any)._pc as RTCPeerConnection;
-
-    // Optimize bandwidth for video (save data while maintaining quality)
-    const senders = pc.getSenders();
-    senders.forEach(sender => {
-      if (sender.track?.kind === 'video') {
-        const parameters = sender.getParameters();
-        if (!parameters.encodings) {
-          parameters.encodings = [{}];
-        }
-        // Limit max bitrate to 1.5 Mbps for video (good quality, reasonable data)
-        parameters.encodings[0].maxBitrate = 1500000; // 1.5 Mbps
-        parameters.encodings[0].maxFramerate = 30;
-        sender.setParameters(parameters).catch(err =>
-          console.warn('Failed to set video parameters:', err)
-        );
-      } else if (sender.track?.kind === 'audio') {
-        const parameters = sender.getParameters();
-        if (!parameters.encodings) {
-          parameters.encodings = [{}];
-        }
-        // Limit audio bitrate to 64 kbps (excellent quality for voice)
-        parameters.encodings[0].maxBitrate = 64000; // 64 kbps
-        sender.setParameters(parameters).catch(err =>
-          console.warn('Failed to set audio parameters:', err)
-        );
-      }
-    });
-
-    // Monitor connection quality
-    pc.addEventListener('iceconnectionstatechange', () => {
-      console.log('ICE connection state:', pc.iceConnectionState);
-    });
-
-    pc.addEventListener('connectionstatechange', () => {
-      console.log('Connection state:', pc.connectionState);
-    });
   }
 
   getLocalStream(): MediaStream | null {
     return this.localStream;
   }
 
-  getRemoteStream(): MediaStream | null {
-    return this.remoteStream;
+  onSignal(cb: (payload: SignalPayload) => void) {
+    this.onSignalCallback = cb;
   }
 
-  cleanup(): void {
+  onRemoteStream(cb: (remoteId: string, stream: MediaStream) => void) {
+    this.onRemoteStreamCallback = cb;
+  }
+
+  // Create a peer for a specific remote id. If a peer already exists, it will be returned.
+  createPeer(remoteId: string, initiator: boolean): SimplePeer.Instance {
+    if (this.peers.has(remoteId)) {
+      return this.peers.get(remoteId)!.peer;
+    }
+
+    const peer = new SimplePeer({
+      initiator,
+      trickle: true,
+      stream: this.localStream || undefined,
+      config: { iceServers: this.iceServers },
+      offerOptions: { offerToReceiveAudio: true, offerToReceiveVideo: true }
+    });
+
+    const wrapper: PeerWrapper = { peer, remoteId };
+    this.peers.set(remoteId, wrapper);
+
+    peer.on('signal', data => {
+      // Deliver signals with target info
+      if (this.onSignalCallback) {
+        this.onSignalCallback({ to: remoteId, signalData: data });
+      }
+    });
+
+    peer.on('stream', (stream: MediaStream) => {
+      if (this.onRemoteStreamCallback) {
+        this.onRemoteStreamCallback(remoteId, stream);
+      }
+    });
+
+    peer.on('connect', () => console.log(`Peer connected: ${remoteId}`));
+    peer.on('close', () => {
+      console.log(`Peer closed: ${remoteId}`);
+      this.cleanupPeer(remoteId);
+    });
+    peer.on('error', (err: any) => console.error(`Peer error (${remoteId}):`, err));
+
+    // After creating a peer, process any pending signals queued for this remote
+    const pending = this.pendingSignals.get(remoteId) || [];
+    if (pending.length > 0) {
+      pending.forEach(s => {
+        try {
+          peer.signal(s);
+        } catch (e) {
+          console.warn('Error applying pending signal', e);
+        }
+      });
+      this.pendingSignals.delete(remoteId);
+    }
+
+    // Try to optimize after a brief delay when the underlying RTCPeerConnection is available
+    setTimeout(() => this.optimizePeerConnection(peer), 500);
+
+    return peer;
+  }
+
+  // Initiate outgoing call to a specific remote
+  async initiateCallTo(remoteId: string, initiator: boolean, signalData?: any) {
+    // Ensure peer exists
+    const peer = this.createPeer(remoteId, initiator);
+
+    // If we're not the initiator and we already have an offer (signalData), apply it
+    if (signalData && !initiator) {
+      try {
+        peer.signal(signalData);
+      } catch (e) {
+        console.warn('Error signaling peer with offer', e);
+      }
+    }
+  }
+
+  // Handle incoming signal (from server). If peer exists, signal immediately.
+  // Otherwise, queue the signal and create peer later when needed (for offers we create peer automatically).
+  signal(fromUserId: string, data: any) {
+    const wrapper = this.peers.get(fromUserId);
+    if (wrapper) {
+      // Defensive: ensure peer object is valid and not destroyed
+      if (!wrapper.peer || typeof (wrapper.peer as any).signal !== 'function') {
+        console.warn('Existing peer object invalid, cleaning up and queuing signal for', fromUserId);
+        this.cleanupPeer(fromUserId);
+        const arr = this.pendingSignals.get(fromUserId) || [];
+        arr.push(data);
+        this.pendingSignals.set(fromUserId, arr);
+        return;
+      }
+
+      try {
+        wrapper.peer.signal(data);
+      } catch (e) {
+        console.warn('Failed to signal existing peer (will recreate peer and retry):', e);
+        // Attempt a safe recovery: destroy and recreate a new non-initiator peer to apply the signal
+        try {
+          this.cleanupPeer(fromUserId);
+          const newPeer = this.createPeer(fromUserId, false);
+          newPeer.signal(data);
+        } catch (e2) {
+          console.warn('Recovery attempt failed, queuing signal for later:', e2);
+          const arr = this.pendingSignals.get(fromUserId) || [];
+          arr.push(data);
+          this.pendingSignals.set(fromUserId, arr);
+        }
+      }
+      return;
+    }
+
+    // If data looks like an SDP offer, create a peer as non-initiator and apply it
+    const looksLikeOffer = data && (data.type === 'offer' || data.sdp);
+    if (looksLikeOffer) {
+      const newPeer = this.createPeer(fromUserId, false);
+      try {
+        newPeer.signal(data);
+      } catch (e) {
+        console.warn('Error signaling newly created peer with offer:', e);
+      }
+      return;
+    }
+
+    // Otherwise queue the signal until a peer exists
+    const arr = this.pendingSignals.get(fromUserId) || [];
+    arr.push(data);
+    this.pendingSignals.set(fromUserId, arr);
+  }
+
+  private optimizePeerConnection(peer: SimplePeer.Instance) {
+    try {
+      const pc = (peer as any)._pc as RTCPeerConnection | undefined;
+      if (!pc) return;
+
+      const senders = pc.getSenders();
+      senders.forEach(sender => {
+        try {
+          if (sender.track?.kind === 'video') {
+            const parameters = sender.getParameters();
+            if (!parameters.encodings) parameters.encodings = [{}];
+            parameters.encodings[0].maxBitrate = 1500000;
+            parameters.encodings[0].maxFramerate = 30;
+            sender.setParameters(parameters).catch(() => {});
+          } else if (sender.track?.kind === 'audio') {
+            const parameters = sender.getParameters();
+            if (!parameters.encodings) parameters.encodings = [{}];
+            parameters.encodings[0].maxBitrate = 64000;
+            sender.setParameters(parameters).catch(() => {});
+          }
+        } catch (e) {
+          // ignore per-sender failures
+        }
+      });
+
+      pc.addEventListener('iceconnectionstatechange', () => console.log('ICE state:', pc.iceConnectionState));
+      pc.addEventListener('connectionstatechange', () => console.log('PC state:', pc.connectionState));
+    } catch (e) {
+      console.warn('optimizePeerConnection error', e);
+    }
+  }
+
+  cleanupPeer(remoteId: string) {
+    const wrapper = this.peers.get(remoteId);
+    if (wrapper) {
+      try {
+        wrapper.peer.destroy();
+      } catch (e) {
+        console.warn('Error destroying peer', e);
+      }
+      this.peers.delete(remoteId);
+    }
+    if (this.pendingSignals.has(remoteId)) this.pendingSignals.delete(remoteId);
+  }
+
+  cleanupAll() {
+    this.peers.forEach((wrapper, id) => {
+      try { wrapper.peer.destroy(); } catch (e) {}
+    });
+    this.peers.clear();
+    this.pendingSignals.clear();
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
+      try { this.localStream.getTracks().forEach(t => t.stop()); } catch (e) {}
       this.localStream = null;
     }
-
-    if (this.peer) {
-      this.peer.destroy();
-      this.peer = null;
-    }
-
-    this.remoteStream = null;
     this.onRemoteStreamCallback = null;
-    this.onSignalCallback = null; // Prevent memory leaks
+    this.onSignalCallback = null;
   }
 }

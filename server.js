@@ -5,6 +5,24 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+
+// Load environment variables from .env.local if it exists
+const envPath = path.join(__dirname, '.env.local');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf-8');
+  envContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const [key, ...valueParts] = trimmed.split('=');
+      if (key) {
+        process.env[key.trim()] = valueParts.join('=').trim();
+      }
+    }
+  });
+  console.log('✅ Loaded environment variables from .env.local');
+}
 
 // Room ID generation function (must match frontend)
 const generateRoomId = () => {
@@ -195,6 +213,8 @@ io.on('connection', (socket) => {
     
     rooms.set(roomId, room);
     socket.join(roomId);
+  // track which room this socket is in
+  socket.roomId = roomId;
     
     const shareUrl = `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/room/${roomId}`;
     
@@ -205,7 +225,7 @@ io.on('connection', (socket) => {
 
   // Join room event
   socket.on('join-room', (data) => {
-    const { roomId, passcode, userName } = data;
+    const { roomId, passcode, userName, persistentUserId } = data;
     
     console.log(`🔍 Received join-room event with data:`, data);
     console.log(`🔍 Attempting to join room: ${roomId} by user: ${userName}`);
@@ -235,8 +255,18 @@ io.on('connection', (socket) => {
     
     console.log(`✅ Passcode valid for room ${roomId}`);
     
-    // Generate consistent user ID based on socket authentication or guest ID
-    const userId = socket.user ? socket.user.id : `guest-${socket.id}`;
+    // Determine consistent user ID:
+    // - If socket is authenticated, use authenticated user id
+    // - Else if client provided a persistentUserId (stored in localStorage), prefer that
+    // - Otherwise fall back to a guest id derived from the socket id
+    const userId = socket.user
+      ? socket.user.id
+      : (persistentUserId || `guest-${socket.id}`);
+
+    // Attach userId to socket for future reference
+    socket.userId = userId;
+  // Attach userName to socket for easier attribution in events
+  socket.userName = userName;
     
     // Check if user is already in the room by user ID (not just socket ID)
     const existingParticipant = room.participants.find(p => p.id === userId);
@@ -245,6 +275,13 @@ io.on('connection', (socket) => {
       console.log(`🔄 Updating socket ID for existing participant`);
       // Update the socket ID for the existing participant
       existingParticipant.socketId = socket.id;
+      
+      // Ensure isCreator flag is set correctly on reconnect
+      if (!existingParticipant.isCreator) {
+        existingParticipant.isCreator = (socket.user && socket.user.email === room.creator) || userId === room.creator;
+      }
+      
+      console.log(`📋 Updated participant:`, existingParticipant);
       
       // Still send current room data
       socket.emit('room-joined', { 
@@ -259,6 +296,18 @@ io.on('connection', (socket) => {
       
       // Re-join socket to room (in case socket reconnected)
       socket.join(roomId);
+      socket.roomId = roomId;
+      
+      // 📡 REAL-TIME UPDATE: Broadcast updated participant list to all users
+      console.log(`📡 Broadcasting updated participant list to room ${roomId} after reconnect`);
+      io.to(roomId).emit('participants-updated', {
+        participants: room.participants.map(p => ({
+          id: p.id,
+          name: p.name,
+          isHost: p.isCreator
+        }))
+      });
+      
       return;
     }
     
@@ -283,7 +332,10 @@ io.on('connection', (socket) => {
       id: userId,
       name: userName,
       socketId: socket.id,
-      isCreator: socket.user ? socket.user.email === room.creator : false,
+      // Check if this user is the room creator (by email or by checking if already marked as creator)
+      isCreator: (socket.user && socket.user.email === room.creator) || 
+                 room.participants.some(p => p.id === userId && p.isCreator) ||
+                 userId === room.creator,
       joinedAt: new Date().toISOString()
     };
     
@@ -296,6 +348,8 @@ io.on('connection', (socket) => {
     console.log(`📋 All participants:`, room.participants);
     
     socket.join(roomId);
+  // track which room this socket is in
+  socket.roomId = roomId;
     console.log(`✅ Socket ${socket.id} joined room ${roomId}`);
     
     console.log(`👥 ${userName} joined room ${roomId}`);
@@ -331,7 +385,169 @@ io.on('connection', (socket) => {
       participantCount: room.participants.length
     });
 
+    // 📡 REAL-TIME UPDATE: Broadcast updated participant list to all users in the room
+    const participantsList = room.participants.map(p => ({
+      id: p.id,
+      name: p.name,
+      isHost: p.isCreator
+    }));
+    console.log(`📡 Broadcasting updated participant list to room ${roomId}:`, participantsList);
+    io.to(roomId).emit('participants-updated', {
+      participants: participantsList
+    });
+
     console.log(`✅ Join room process completed for ${userName}`);
+  });
+
+  // WebRTC signalling: targeted relay for per-peer signalling
+  // Clients should emit: { targetUserId, signal } or { to, signalData }
+  socket.on('webrtc-signal', (payload) => {
+    try {
+      const roomId = socket.roomId;
+      if (!roomId) {
+        console.log('⚠️ webrtc-signal received but socket has no roomId:', socket.id);
+      }
+
+      // normalize payload
+      const targetUserId = payload && (payload.targetUserId || payload.to || (payload.data && payload.data.to));
+      const signal = payload && (payload.signal || payload.signalData || payload.data || payload);
+
+      const fromUserId = socket.userId || socket.id;
+
+      if (!targetUserId) {
+        console.log('⚠️ webrtc-signal missing targetUserId, broadcasting to room if available');
+        if (roomId) {
+          socket.to(roomId).emit('webrtc-signal', { fromUserId, signal });
+        }
+        return;
+      }
+
+      const room = rooms.get(roomId);
+      if (!room) {
+        console.log(`⚠️ webrtc-signal: room not found for socket ${socket.id}`);
+        return;
+      }
+
+      const target = room.participants.find(p => p.id === targetUserId);
+      if (!target) {
+        console.log(`⚠️ webrtc-signal: target ${targetUserId} not found in room ${roomId}`);
+        return;
+      }
+
+      console.log(`📡 Relaying webrtc-signal from ${fromUserId} to ${targetUserId} in room ${roomId}`);
+      io.to(target.socketId).emit('webrtc-signal', { fromUserId, signal });
+    } catch (err) {
+      console.error('❌ Error handling webrtc-signal:', err);
+    }
+  });
+
+  // Start call: either targeted or broadcast to room
+  socket.on('start-call', (payload) => {
+    try {
+      const roomId = socket.roomId;
+      const targetUserId = payload && (payload.targetUserId || payload.to);
+      const fromUserId = socket.userId || socket.id;
+
+      if (targetUserId && roomId) {
+        const room = rooms.get(roomId);
+        const target = room && room.participants.find(p => p.id === targetUserId);
+        if (target) {
+          console.log(`📞 start-call from ${fromUserId} -> ${targetUserId}`);
+          io.to(target.socketId).emit('start-call', { fromUserId, callType: payload.callType });
+          return;
+        }
+      }
+
+      // default: broadcast to room excluding sender
+      if (roomId) {
+        console.log(`📞 Broadcasting start-call from ${fromUserId} to room ${roomId}`);
+        socket.to(roomId).emit('start-call', { fromUserId, callType: payload && payload.callType });
+      }
+    } catch (err) {
+      console.error('❌ Error handling start-call:', err);
+    }
+  });
+
+  // Accept call: route back to caller (target) or broadcast
+  socket.on('accept-call', (payload) => {
+    try {
+      const roomId = socket.roomId;
+      const targetUserId = payload && (payload.targetUserId || payload.to || payload.fromUserId);
+      const fromUserId = socket.userId || socket.id; // the accepter
+
+      if (targetUserId && roomId) {
+        const room = rooms.get(roomId);
+        const target = room && room.participants.find(p => p.id === targetUserId);
+        if (target) {
+          console.log(`✅ ${fromUserId} accepted call and notifying ${targetUserId}`);
+          io.to(target.socketId).emit('accept-call', { fromUserId, callType: payload && payload.callType });
+          return;
+        }
+      }
+
+      // default: broadcast accept-call to room excluding accepter
+      if (roomId) {
+        console.log(`✅ Broadcasting accept-call from ${fromUserId} to room ${roomId}`);
+        socket.to(roomId).emit('accept-call', { fromUserId, callType: payload && payload.callType });
+      }
+    } catch (err) {
+      console.error('❌ Error handling accept-call:', err);
+    }
+  });
+
+  // End call: route termination signal to target or broadcast
+  socket.on('end-call', (payload) => {
+    try {
+      const roomId = socket.roomId;
+      const targetUserId = payload && (payload.targetUserId || payload.to);
+      const fromUserId = socket.userId || socket.id;
+
+      if (targetUserId && roomId) {
+        const room = rooms.get(roomId);
+        const target = room && room.participants.find(p => p.id === targetUserId);
+        if (target) {
+          console.log(`🔴 ${fromUserId} ended call with ${targetUserId}`);
+          io.to(target.socketId).emit('end-call', { fromUserId });
+          return;
+        }
+      }
+
+      // default: broadcast end-call to room excluding sender
+      if (roomId) {
+        console.log(`🔴 Broadcasting end-call from ${fromUserId} to room ${roomId}`);
+        socket.to(roomId).emit('end-call', { fromUserId });
+      }
+    } catch (err) {
+      console.error('❌ Error handling end-call:', err);
+    }
+  });
+
+  // Mute status event - track who is muted
+  socket.on('mute-status', ({ roomId, isMuted }) => {
+    try {
+      const fromUserId = socket.userId || socket.id;
+      console.log(`🔇 ${fromUserId} mute status: ${isMuted ? 'MUTED' : 'UNMUTED'}`);
+
+      if (roomId) {
+        const room = rooms.get(roomId);
+        if (room) {
+          // Update participant mute status
+          const participant = room.participants.find(p => p.socketId === socket.id);
+          if (participant) {
+            participant.isMuted = isMuted;
+          }
+
+          // Broadcast mute status with sender info to all participants in room
+          socket.to(roomId).emit('mute-status', { 
+            isMuted, 
+            fromUserId,
+            senderName: participant?.name || 'Unknown'
+          });
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error handling mute-status:', err);
+    }
   });
 
   // Chat message event
@@ -384,8 +600,222 @@ io.on('connection', (socket) => {
     console.log(`✅ Message broadcasted and stored for room ${roomId}`);
   });
 
+  // Call list events
+  socket.on('invite-to-call', ({ roomId, targetUserId, targetUserName }) => {
+    try {
+      console.log(`📞 ${socket.id} inviting ${targetUserId} to call in room ${roomId}`);
+      const room = rooms.get(roomId);
+      if (!room) {
+        console.warn(`⚠️ invite-to-call: room ${roomId} not found`);
+        io.to(socket.id).emit('invite-failed', { reason: 'room-not-found', targetUserId, targetUserName });
+        return;
+      }
+
+      // Log current participants for easier debugging
+      console.log('📋 Current participants in room:', (room.participants || []).map(p => ({ id: p.id, name: p.name, socketId: p.socketId, isMuted: p.isMuted })));
+
+      const target = room.participants.find(p => p.id === targetUserId);
+      if (!target) {
+        console.warn(`⚠️ invite-to-call: target ${targetUserId} not found in room ${roomId}`);
+        io.to(socket.id).emit('invite-failed', { reason: 'target-not-found', targetUserId, targetUserName });
+        return;
+      }
+
+      if (!target.socketId) {
+        console.warn(`⚠️ invite-to-call: target ${targetUserId} has no socketId`);
+        io.to(socket.id).emit('invite-failed', { reason: 'target-offline', targetUserId, targetUserName });
+        return;
+      }
+
+      // Send invitation to the target
+      console.log(`📨 Emitting invite-to-call from ${socket.userId || socket.id} (${socket.userName || 'Unknown'}) to ${target.id} (socket ${target.socketId})`);
+      
+      // Find the inviter participant to check if they're host
+      const inviterParticipant = room.participants.find(p => p.socketId === socket.id);
+      
+      io.to(target.socketId).emit('invite-to-call', {
+        fromUser: {
+          id: socket.userId || socket.id,
+          name: socket.userName || 'Unknown',
+          isHost: inviterParticipant ? inviterParticipant.isCreator : false
+        }
+      });
+
+      // Acknowledge the inviter that the invite was sent
+      io.to(socket.id).emit('invite-sent', { targetUserId: target.id, targetUserName: target.name });
+    } catch (err) {
+      console.error('❌ Error handling invite-to-call:', err);
+      io.to(socket.id).emit('invite-failed', { reason: 'server-error', details: String(err), targetUserId, targetUserName });
+    }
+  });
+
+  socket.on('request-join-call', ({ roomId, userId, userName }) => {
+    try {
+      console.log(`🙋 ${userName} requesting to join call in room ${roomId}`);
+      const room = rooms.get(roomId);
+      if (!room) {
+        console.warn(`⚠️ request-join-call: room ${roomId} not found`);
+        return;
+      }
+
+      // Log all participants to debug
+      console.log(`📋 Room ${roomId} participants:`, room.participants.map(p => ({
+        id: p.id,
+        name: p.name,
+        isCreator: p.isCreator,
+        socketId: p.socketId
+      })));
+
+      // Send to host/room owner
+      const hostParticipant = room.participants.find(p => p.isCreator);
+      if (hostParticipant) {
+        console.log(`📨 Emitting request-join-call to host ${hostParticipant.id} (${hostParticipant.name}) (socket ${hostParticipant.socketId})`);
+        io.to(hostParticipant.socketId).emit('request-join-call', {
+          fromUser: {
+            id: userId,
+            name: userName,
+            isHost: false
+          }
+        });
+      } else {
+        console.warn(`⚠️ request-join-call: no host (isCreator) found in room ${roomId}`);
+        console.warn(`⚠️ Total participants in room: ${room.participants.length}`);
+        console.warn(`⚠️ Room creator email: ${room.creator}`);
+      }
+    } catch (err) {
+      console.error('❌ Error handling request-join-call:', err);
+    }
+  });
+
+  // 🎙️ HOST BROADCAST: Handle host starting auto-broadcast
+  socket.on('start-broadcast', ({ roomId, broadcastType, userName }) => {
+    try {
+      console.log(`🎙️ Host ${userName} started ${broadcastType} broadcast in room ${roomId}`);
+      const room = rooms.get(roomId);
+      if (!room) {
+        console.warn(`⚠️ start-broadcast: room ${roomId} not found`);
+        return;
+      }
+
+      // Store broadcast state
+      room.broadcastActive = true;
+      room.broadcastType = broadcastType;
+      room.broadcaster = {
+        id: socket.userId || socket.id,
+        name: userName,
+        socketId: socket.id
+      };
+
+      // Notify all participants in the room that host is broadcasting
+      io.to(roomId).emit('host-broadcasting', {
+        hostName: userName,
+        broadcastType,
+        hostId: socket.userId || socket.id
+      });
+
+      console.log(`📢 Notified room ${roomId} that host is broadcasting ${broadcastType}`);
+    } catch (err) {
+      console.error('❌ Error handling start-broadcast:', err);
+    }
+  });
+
+  socket.on('approve-join-request', ({ roomId, userId, userName }) => {
+    try {
+      console.log(`✅ Host approved join request from ${userName}`);
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const target = room.participants.find(p => p.id === userId);
+      if (target) {
+        io.to(target.socketId).emit('invitation-approved', {
+          hostName: socket.userName || 'Host'
+        });
+
+        // Add to call list
+        if (!room.callList) {
+          room.callList = [];
+        }
+        room.callList.push(userId);
+
+        // Notify all participants of updated call list
+        io.to(roomId).emit('call-list-updated', { callList: room.callList });
+      }
+    } catch (err) {
+      console.error('❌ Error handling approve-join-request:', err);
+    }
+  });
+
+  socket.on('reject-join-request', ({ roomId, userId, userName }) => {
+    try {
+      console.log(`❌ Host rejected join request from ${userName}`);
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const target = room.participants.find(p => p.id === userId);
+      if (target) {
+        io.to(target.socketId).emit('invitation-rejected', {
+          hostName: socket.userName || 'Host'
+        });
+      }
+    } catch (err) {
+      console.error('❌ Error handling reject-join-request:', err);
+    }
+  });
+
+  socket.on('accept-invitation', ({ roomId, userId, userName }) => {
+    try {
+      console.log(`✅ ${userName} accepted invitation in room ${roomId}`);
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      // Add to call list
+      if (!room.callList) {
+        room.callList = [];
+      }
+      if (!room.callList.includes(userId)) {
+        room.callList.push(userId);
+      }
+
+      // Notify all participants of updated call list
+      io.to(roomId).emit('call-list-updated', { callList: room.callList });
+    } catch (err) {
+      console.error('❌ Error handling accept-invitation:', err);
+    }
+  });
+
+  socket.on('reject-invitation', ({ roomId, userId, userName }) => {
+    try {
+      console.log(`❌ ${userName} rejected invitation in room ${roomId}`);
+      // Just log - no need to notify
+    } catch (err) {
+      console.error('❌ Error handling reject-invitation:', err);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('🔌 User disconnected:', socket.id);
+
+    // Remove participant entries that belonged to this socket from any rooms
+    for (const [roomId, room] of rooms.entries()) {
+      const idx = room.participants.findIndex(p => p.socketId === socket.id);
+      if (idx !== -1) {
+        const [removed] = room.participants.splice(idx, 1);
+        console.log(`🧹 Removed participant ${removed.id} from room ${roomId} due to disconnect`);
+        // notify others in the room
+        socket.to(roomId).emit('user-left', removed.name || removed.id);
+        
+        // 📡 REAL-TIME UPDATE: Broadcast updated participant list to all users in the room
+        console.log(`📡 Broadcasting updated participant list to room ${roomId} after disconnect`);
+        io.to(roomId).emit('participants-updated', {
+          participants: room.participants.map(p => ({
+            id: p.id,
+            name: p.name,
+            isHost: p.isCreator
+          }))
+        });
+      }
+    }
+
     if (socket.userId) {
       userSessions.delete(socket.userId);
     }

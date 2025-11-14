@@ -1,3 +1,6 @@
+// Load environment variables from .env.local first
+require('dotenv').config({ path: '.env.local' });
+
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -460,6 +463,12 @@ nextApp.prepare().then(() => {
           fromUserId: sender.id
         });
       }
+    });
+
+    socket.on('mute-status', ({ roomId, isMuted }) => {
+      console.log('🔇 Mute status update in room:', roomId, 'Muted:', isMuted);
+      // Broadcast mute status to all other participants in the room
+      socket.to(roomId).emit('mute-status', { isMuted });
     });
 
     socket.on('disconnect', () => {
