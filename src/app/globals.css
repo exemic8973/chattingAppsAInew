@@ -217,3 +217,210 @@ body {
   font-size: 0.9rem;
   font-weight: 500;
 }
+
+/* ========================================
+   Teams-Style Meeting UI
+   ======================================== */
+
+/* Meeting Container */
+.teams-meeting-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #252525;
+  color: #fff;
+  overflow: hidden;
+}
+
+/* Meeting Header */
+.meeting-header {
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* Meeting Content (Video + Sidebar) */
+.meeting-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0; /* Important for flex children */
+}
+
+/* Video Gallery Grid Layouts */
+.video-gallery {
+  grid-auto-rows: minmax(200px, 1fr);
+}
+
+.video-gallery-single {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+}
+
+.video-gallery-dual {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.video-gallery-quad {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.video-gallery-nine {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+}
+
+.video-gallery-many {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* Video Tile */
+.video-tile {
+  position: relative;
+  background: #1a1a1a;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.video-tile:hover {
+  transform: scale(1.02);
+}
+
+.video-tile.speaking {
+  border-color: #0078d4 !important;
+  box-shadow: 0 0 15px rgba(0, 120, 212, 0.5);
+}
+
+.video-tile.host {
+  border-color: #ffd700 !important;
+}
+
+/* Meeting Controls */
+.meeting-controls {
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.control-btn {
+  background: #424242;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.control-btn:hover {
+  background: #505050;
+  transform: translateY(-2px);
+}
+
+.control-btn:active {
+  transform: translateY(0);
+}
+
+.control-btn.btn-secondary {
+  background: #424242;
+}
+
+.control-btn.btn-secondary:hover {
+  background: #0078d4;
+}
+
+.control-btn.btn-danger {
+  background: #e81123;
+}
+
+.control-btn.btn-danger:hover {
+  background: #c50f1f;
+}
+
+/* Side Panel */
+.side-panel {
+  flex-shrink: 0;
+}
+
+.side-panel-header .btn {
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.side-panel-header .btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Participant Item Hover */
+.participant-item:hover {
+  background: #333 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .side-panel {
+    position: absolute;
+    right: 0;
+    top: 60px;
+    bottom: 80px;
+    width: 100%;
+    max-width: 360px;
+    box-shadow: -4px 0 10px rgba(0, 0, 0, 0.5);
+    z-index: 20;
+  }
+
+  .video-gallery-quad,
+  .video-gallery-nine {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .meeting-controls {
+    gap: 8px !important;
+  }
+
+  .control-item small {
+    display: none;
+  }
+
+  .control-btn {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .video-gallery {
+    grid-template-columns: 1fr !important;
+  }
+
+  .meeting-header h6 {
+    font-size: 0.9rem;
+  }
+
+  .meeting-header small {
+    font-size: 0.7rem;
+  }
+}
+
+/* Smooth transitions */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #424242 #1f1f1f;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #1f1f1f;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #505050;
+}
