@@ -12,6 +12,36 @@
   --card-bg: #16213e;
   --text-primary: #ffffff;
   --text-secondary: #b8bcc8;
+  
+  /* Meeting Component Design Tokens */
+  --meeting-bg: #1a1a1a;
+  --meeting-text: #ffffff;
+  --meeting-text-secondary: rgba(255, 255, 255, 0.8);
+  --meeting-border: rgba(255, 255, 255, 0.2);
+  --meeting-hover: rgba(255, 255, 255, 0.1);
+  --meeting-accent: #007bff;
+  --meeting-success: #28a745;
+  --meeting-danger: #dc3545;
+  --meeting-warning: #ffc107;
+  
+  /* Spacing Scale */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
 }
 
 body {
@@ -39,6 +69,68 @@ body {
 
 .chat-message {
   animation: fadeInUp 0.3s ease-out;
+}
+
+/* Meeting Component Utility Classes */
+.meeting-container {
+  background: var(--meeting-bg);
+  color: var(--meeting-text);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+
+.meeting-button {
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.meeting-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.meeting-button-primary {
+  background: var(--meeting-accent);
+  color: white;
+}
+
+.meeting-button-success {
+  background: var(--meeting-success);
+  color: white;
+}
+
+.meeting-button-danger {
+  background: var(--meeting-danger);
+  color: white;
+}
+
+.meeting-button-warning {
+  background: var(--meeting-warning);
+  color: black;
+}
+
+.meeting-icon {
+  font-size: 16px;
+  display: inline-block;
+}
+
+.meeting-text-secondary {
+  color: var(--meeting-text-secondary);
+  font-size: 12px;
+}
+
+.meeting-divider {
+  border-color: var(--meeting-border);
+  margin: var(--space-sm) 0;
 }
 
 @keyframes fadeInUp {

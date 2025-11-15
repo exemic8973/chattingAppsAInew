@@ -20,63 +20,66 @@ export default function MeetingControls({
   onLeaveMeeting 
 }: MeetingControlsProps) {
   return (
-    <div className="meeting-controls" style={{ 
-      background: '#1a1a1a', 
-      color: 'white', 
-      padding: '15px', 
-      display: 'flex', 
-      justifyContent: 'center', 
-      alignItems: 'center', 
-      gap: '15px',
+    <div className="meeting-controls meeting-container" style={{ 
       position: 'fixed',
       bottom: 0,
       left: 0,
       right: 0,
-      zIndex: 100
+      zIndex: 100,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 'var(--space-md)'
     }}>
       <button 
         onClick={onToggleMute}
-        className={`btn ${isMuted ? 'btn-danger' : 'btn-success'}`}
-        style={{ padding: '10px 15px', fontSize: '14px' }}
+        className={`meeting-button ${isMuted ? 'meeting-button-danger' : 'meeting-button-success'}`}
         title={isMuted ? 'Unmute' : 'Mute'}
+        aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
       >
-        {isMuted ? '🔇' : '🎤'} {isMuted ? 'Unmute' : 'Mute'}
+        <i className={`bi ${isMuted ? 'bi-mic-mute' : 'bi-mic'} meeting-icon`}></i>
+        {isMuted ? 'Unmute' : 'Mute'}
       </button>
 
       <button 
         onClick={onToggleVideo}
-        className={`btn ${isVideoOff ? 'btn-danger' : 'btn-success'}`}
-        style={{ padding: '10px 15px', fontSize: '14px' }}
+        className={`meeting-button ${isVideoOff ? 'meeting-button-danger' : 'meeting-button-success'}`}
         title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
+        aria-label={isVideoOff ? 'Turn camera on' : 'Turn camera off'}
       >
-        {isVideoOff ? '📹' : '📷'} {isVideoOff ? 'Camera On' : 'Camera Off'}
+        <i className={`bi ${isVideoOff ? 'bi-camera-video-off' : 'bi-camera-video'} meeting-icon`}></i>
+        {isVideoOff ? 'Camera On' : 'Camera Off'}
       </button>
 
       <button 
         onClick={onToggleChat}
-        className="btn btn-primary"
-        style={{ padding: '10px 15px', fontSize: '14px' }}
+        className="meeting-button meeting-button-primary"
         title="Toggle Chat"
+        aria-label="Toggle chat panel"
       >
-        💬 Chat
+        <i className="bi bi-chat-dots meeting-icon"></i>
+        Chat
       </button>
 
       <button 
         onClick={onToggleParticipants}
-        className="btn btn-primary"
-        style={{ padding: '10px 15px', fontSize: '14px' }}
+        className="meeting-button meeting-button-primary"
         title="Toggle Participants"
+        aria-label="Toggle participants panel"
       >
-        👥 Participants
+        <i className="bi bi-people meeting-icon"></i>
+        Participants
       </button>
 
       <button 
         onClick={onLeaveMeeting}
-        className="btn btn-danger"
-        style={{ padding: '10px 15px', fontSize: '14px', marginLeft: '20px' }}
+        className="meeting-button meeting-button-danger"
         title="Leave Meeting"
+        aria-label="Leave meeting"
+        style={{ marginLeft: 'var(--space-xl)' }}
       >
-        📞 Leave
+        <i className="bi bi-telephone-x meeting-icon"></i>
+        Leave
       </button>
     </div>
   );

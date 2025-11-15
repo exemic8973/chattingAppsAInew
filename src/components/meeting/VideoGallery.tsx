@@ -39,27 +39,39 @@ export default function VideoGallery({
     <div className="video-gallery" style={{ 
       display: 'grid', 
       gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-      gap: '10px', 
-      padding: '20px',
+      gap: 'var(--space-md)', 
+      padding: 'var(--space-lg)',
       background: '#f5f5f5'
     }}>
       {/* Local Video Tile */}
       <div className="video-tile" style={{ 
         background: '#000', 
-        borderRadius: '8px', 
+        borderRadius: 'var(--radius-md)', 
         aspectRatio: '16/9', 
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        position: 'relative'
+        position: 'relative',
+        boxShadow: 'var(--shadow-md)'
       }}>
         <div style={{ color: 'white', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '10px' }}>👤</div>
-          <div style={{ fontSize: '14px' }}>{localUserName} (You)</div>
-          <div style={{ fontSize: '12px', opacity: 0.7 }}>
-            {localIsMuted ? '🔇 Muted' : '🎤 Unmuted'} | {localIsVideoOff ? '📹 Camera Off' : '📹 Camera On'}
+          <div style={{ fontSize: '48px', marginBottom: 'var(--space-sm)' }}>
+            <i className="bi bi-person-circle"></i>
           </div>
-          {localIsSpeaking && <div style={{ color: '#4CAF50' }}>🗣️ Speaking</div>}
+          <div style={{ fontSize: '14px', fontWeight: 600 }}>{localUserName} (You)</div>
+          <div className="meeting-text-secondary" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', justifyContent: 'center' }}>
+            <i className={`bi ${localIsMuted ? 'bi-mic-mute' : 'bi-mic'}`}></i>
+            <span>{localIsMuted ? 'Muted' : 'Unmuted'}</span>
+            <span>•</span>
+            <i className={`bi ${localIsVideoOff ? 'bi-camera-video-off' : 'bi-camera-video'}`}></i>
+            <span>{localIsVideoOff ? 'Camera Off' : 'Camera On'}</span>
+          </div>
+          {localIsSpeaking && (
+            <div style={{ color: 'var(--meeting-success)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', justifyContent: 'center' }}>
+              <i className="bi bi-volume-up"></i>
+              <span>Speaking</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -69,20 +81,34 @@ export default function VideoGallery({
         return (
           <div key={participant.id} className="video-tile" style={{ 
             background: '#000', 
-            borderRadius: '8px', 
+            borderRadius: 'var(--radius-md)', 
             aspectRatio: '16/9', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
-            position: 'relative'
+            position: 'relative',
+            boxShadow: 'var(--shadow-md)'
           }}>
             <div style={{ color: 'white', textAlign: 'center' }}>
-              <div style={{ fontSize: '48px', marginBottom: '10px' }}>👤</div>
-              <div style={{ fontSize: '14px' }}>{participant.name}</div>
-              <div style={{ fontSize: '12px', opacity: 0.7 }}>
-                {participant.isMuted ? '🔇 Muted' : '🎤 Unmuted'}
+              <div style={{ fontSize: '48px', marginBottom: 'var(--space-sm)' }}>
+                <i className="bi bi-person-circle"></i>
               </div>
-              {participant.isSpeaking && <div style={{ color: '#4CAF50' }}>🗣️ Speaking</div>}
+              <div style={{ fontSize: '14px', fontWeight: 600 }}>{participant.name}</div>
+              {participant.isHost && (
+                <div style={{ color: 'var(--meeting-warning)', fontSize: '12px' }}>
+                  <i className="bi bi-star-fill"></i> Host
+                </div>
+              )}
+              <div className="meeting-text-secondary" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', justifyContent: 'center' }}>
+                <i className={`bi ${participant.isMuted ? 'bi-mic-mute' : 'bi-mic'}`}></i>
+                <span>{participant.isMuted ? 'Muted' : 'Active'}</span>
+              </div>
+              {participant.isSpeaking && (
+                <div style={{ color: 'var(--meeting-success)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', justifyContent: 'center' }}>
+                  <i className="bi bi-volume-up"></i>
+                  <span>Speaking</span>
+                </div>
+              )}
             </div>
           </div>
         );

@@ -31,44 +31,49 @@ export default function SidePanel({
   return (
     <div className="side-panel" style={{ 
       background: 'white', 
-      borderLeft: '1px solid #ddd', 
+      color: 'black',
+      borderLeft: '1px solid var(--meeting-border)', 
       display: 'flex', 
       flexDirection: 'column',
       height: '100%',
-      width: '300px'
+      width: '300px',
+      borderRadius: 0,
+      boxShadow: 'none'
     }}>
       {/* Tab Navigation */}
       <div className="side-panel-tabs" style={{ 
         display: 'flex', 
-        borderBottom: '1px solid #ddd' 
+        borderBottom: '1px solid var(--meeting-border)' 
       }}>
         <button 
           onClick={() => setActiveTab('chat')}
-          className={`tab-button ${activeTab === 'chat' ? 'active' : ''}`}
+          className={`tab-button meeting-button ${activeTab === 'chat' ? 'meeting-button-primary' : ''}`}
           style={{ 
             flex: 1, 
-            padding: '10px', 
             border: 'none', 
-            background: activeTab === 'chat' ? '#007bff' : '#f8f9fa',
+            background: activeTab === 'chat' ? 'var(--meeting-accent)' : 'transparent',
             color: activeTab === 'chat' ? 'white' : 'black',
-            cursor: 'pointer'
+            borderRadius: 0
           }}
+          aria-label="Chat tab"
         >
+          <i className="bi bi-chat-dots meeting-icon"></i>
           Chat
         </button>
         <button 
           onClick={() => setActiveTab('participants')}
-          className={`tab-button ${activeTab === 'participants' ? 'active' : ''}`}
+          className={`tab-button meeting-button ${activeTab === 'participants' ? 'meeting-button-primary' : ''}`}
           style={{ 
             flex: 1, 
-            padding: '10px', 
             border: 'none', 
-            background: activeTab === 'participants' ? '#007bff' : '#f8f9fa',
+            background: activeTab === 'participants' ? 'var(--meeting-accent)' : 'transparent',
             color: activeTab === 'participants' ? 'white' : 'black',
-            cursor: 'pointer'
+            borderRadius: 0
           }}
+          aria-label="Participants tab"
         >
-          Participants ({participants.length})
+          <i className="bi bi-people meeting-icon"></i>
+          {participants.length}
         </button>
       </div>
 
@@ -82,19 +87,19 @@ export default function SidePanel({
           <div className="messages-container" style={{ 
             flex: 1, 
             overflowY: 'auto', 
-            padding: '10px' 
+            padding: 'var(--space-sm)' 
           }}>
             {messages.map((message) => (
               <div key={message.id} className="message" style={{ 
-                marginBottom: '10px', 
-                padding: '8px', 
+                marginBottom: 'var(--space-sm)', 
+                padding: 'var(--space-sm)', 
                 background: message.userName === currentUserName ? '#e3f2fd' : '#f5f5f5',
-                borderRadius: '8px'
+                borderRadius: 'var(--radius-sm)'
               }}>
                 <div className="message-header" style={{ 
                   fontSize: '12px', 
                   fontWeight: 'bold', 
-                  marginBottom: '4px' 
+                  marginBottom: 'var(--space-xs)' 
                 }}>
                   {message.userName}
                 </div>
@@ -105,10 +110,10 @@ export default function SidePanel({
             ))}
           </div>
           <div className="message-input" style={{ 
-            padding: '10px', 
-            borderTop: '1px solid #ddd' 
+            padding: 'var(--space-sm)', 
+            borderTop: '1px solid var(--meeting-border)' 
           }}>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
               <input 
                 type="text" 
                 value={newMessage}
@@ -116,17 +121,19 @@ export default function SidePanel({
                 placeholder="Type a message..."
                 style={{ 
                   flex: 1, 
-                  padding: '8px', 
-                  border: '1px solid #ddd', 
-                  borderRadius: '4px' 
+                  padding: 'var(--space-sm)', 
+                  border: '1px solid var(--meeting-border)', 
+                  borderRadius: 'var(--radius-sm)'
                 }}
                 onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
+                aria-label="Message input"
               />
               <button 
                 onClick={onSendMessage}
-                className="btn btn-primary"
-                style={{ padding: '8px 16px' }}
+                className="meeting-button meeting-button-primary"
+                aria-label="Send message"
               >
+                <i className="bi bi-send meeting-icon"></i>
                 Send
               </button>
             </div>
@@ -139,30 +146,34 @@ export default function SidePanel({
         <div className="participants-section" style={{ 
           flex: 1, 
           overflowY: 'auto', 
-          padding: '10px' 
+          padding: 'var(--space-sm)' 
         }}>
           {participants.map((participant) => (
             <div key={participant.id} className="participant" style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
               alignItems: 'center', 
-              padding: '8px', 
-              borderBottom: '1px solid #eee'
+              padding: 'var(--space-sm)', 
+              borderBottom: '1px solid var(--meeting-border)'
             }}>
               <div>
                 <div style={{ fontWeight: 'bold' }}>
-                  {participant.name} {participant.isHost && '👑'}
+                  {participant.name}
+                  {participant.isHost && <i className="bi bi-star-fill" style={{ color: 'var(--meeting-warning)', marginLeft: 'var(--space-xs)' }}></i>}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
-                  {hostMutedUsers.has(participant.id) ? '🔇 Muted by host' : '🎤 Active'}
+                <div className="meeting-text-secondary" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                  <i className={`bi ${hostMutedUsers.has(participant.id) ? 'bi-mic-mute' : 'bi-mic'} `}></i>
+                  {hostMutedUsers.has(participant.id) ? 'Muted by host' : 'Active'}
                 </div>
               </div>
               {isHost && (
                 <button 
                   onClick={() => onMuteParticipant(participant.id)}
-                  className="btn btn-sm btn-warning"
+                  className={`meeting-button meeting-button-${hostMutedUsers.has(participant.id) ? 'success' : 'warning'}`}
                   style={{ fontSize: '12px' }}
+                  aria-label={`${hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'} ${participant.name}`}
                 >
+                  <i className={`bi ${hostMutedUsers.has(participant.id) ? 'bi-mic' : 'bi-mic-mute'} meeting-icon`}></i>
                   {hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'}
                 </button>
               )}
