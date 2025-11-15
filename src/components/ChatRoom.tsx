@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getSocket, initializeSocket } from '@/lib/socket';
-import { WebRTCManager } from '@/lib/webrtc';
+import { MultiPeerManager } from '@/lib/webrtc';
 import { User, Message, CallState } from '@/types';
 import { formatTime, copyToClipboard } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -45,16 +45,16 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
   const [localIsSpeaking, setLocalIsSpeaking] = useState(false);
   const [hostMutedUsers, setHostMutedUsers] = useState<Set<string>>(new Set());
   const [isHostMuted, setIsHostMuted] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const webrtcManager = useRef<WebRTCManager | null>(null);
+  const webrtcManager = useRef<MultiPeerManager | null>(null);
   const isMountedRef = useRef(true); // Track if component is mounted
 
   useEffect(() => {
     console.log('🚀 Initializing ChatRoom...');
+    console.log('📊 Initial state - Users:', users.length, 'Messages:', messages.length);
     isMountedRef.current = true; // Mark as mounted
 
     // Get or create room init state (persists across React Strict Mode mounts)
@@ -70,39 +70,78 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     const socket = getSocket();
     console.log('🔌 Socket initialized with ID:', socket.id);
     console.log('📡 Socket connected:', socket.connected);
-    setConnectionStatus(socket.connected ? 'connected' : 'connecting');
     
-    // 🔥 CRITICAL FIX: Ensure socket is connected before proceeding
+    // 🔥 CRITICAL FIX: Ensure socket is connected before proceeding - ENHANCED VERSION
+    
+    // Function to handle socket connection success - DEFINED BEFORE USE
+    const handleSocketConnected = () => {
+      console.log('🎯 Socket connection established, proceeding with setup...');
+      
+      // Continue with the rest of the setup logic
+      webrtcManager.current = new MultiPeerManager();
+      
+      // Set up WebRTC signal handler to relay signals via Socket.IO
+      webrtcManager.current.onSignal((payload) => {
+        console.log('📡 Emitting WebRTC signal to server:', payload);
+        socket.emit('webrtc-signal', {
+          roomId,
+          signalData: payload.signalData,
+          targetUserId: payload.to
+        });
+      });
+      
+      // Continue with the rest of the setup...
+      console.log('🎯 Socket connection setup completed');
+    };
+
     if (!socket.connected) {
       console.log('🔌 Socket not connected, attempting to connect...');
-      socket.connect();
       
-      // Wait for connection with timeout
-      const connectionTimeout = setTimeout(() => {
-        console.log('⏰ Socket connection timeout after 5 seconds');
-        if (!socket.connected) {
-          console.log('❌ Socket failed to connect, showing error...');
-          setConnectionStatus('disconnected');
-          // You could show a user-friendly error message here
-        }
-      }, 5000);
-      
-      socket.once('connect', () => {
-        clearTimeout(connectionTimeout);
-        console.log('✅ Socket connected successfully!');
-        console.log('🔌 New Socket ID:', socket.id);
-        setConnectionStatus('connected');
-      });
+      // Try to connect with better error handling
+      try {
+        socket.connect();
+        console.log('📤 Socket connect() called, waiting for connection...');
+        
+        // Wait for connection with extended timeout for better reliability
+        const connectionTimeout = setTimeout(() => {
+          console.log('⏰ Socket connection timeout after 10 seconds');
+          if (!socket.connected) {
+            console.log('❌ Socket failed to connect after timeout');
+            // Don't show error immediately - let the socket manager handle reconnection
+          }
+        }, 10000);
+        
+        socket.once('connect', () => {
+          clearTimeout(connectionTimeout);
+          console.log('✅ Socket connected successfully!');
+          console.log('🔌 New Socket ID:', socket.id);
+          
+          // Now proceed with the connection-dependent logic
+          handleSocketConnected();
+        });
+        
+        socket.once('connect_error', (error) => {
+          clearTimeout(connectionTimeout);
+          console.log('❌ Socket connection error:', error);
+        });
+        
+      } catch (error) {
+        console.log('❌ Error calling socket.connect():', error);
+      }
+    } else {
+      console.log('✅ Socket already connected, proceeding immediately');
+      handleSocketConnected();
     }
 
-    webrtcManager.current = new WebRTCManager();
+    webrtcManager.current = new MultiPeerManager();
 
     // Set up WebRTC signal handler to relay signals via Socket.IO
-    webrtcManager.current.onSignal((signalData) => {
-      console.log('📡 Emitting WebRTC signal to server:', signalData);
+    webrtcManager.current.onSignal((payload) => {
+      console.log('📡 Emitting WebRTC signal to server:', payload);
       socket.emit('webrtc-signal', {
         roomId,
-        signalData
+        signalData: payload.signalData,
+        targetUserId: payload.to
       });
     });
 
@@ -170,9 +209,12 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       initState.listenersSetUp = true;
 
       socket.on('room-joined', ({ roomId, users, messages }) => {
-      console.log('✅ Successfully joined room:', roomId);
-      console.log('👥 Participants received:', users);
-      console.log('💬 Messages received:', messages);
+      console.log('🎯 ROOM-JOINED EVENT RECEIVED');
+      console.log('📍 Room ID:', roomId);
+      console.log('👥 Participants count:', users?.length || 0);
+      console.log('👥 Participants data:', users);
+      console.log('💬 Messages count:', messages?.length || 0);
+      console.log('💬 Messages data:', messages);
       
       // Add safety checks for undefined/null values
       const safeUsers = users || [];
@@ -279,7 +321,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
     socket.on('webrtc-signal', async ({ signalData, fromUserId }) => {
       if (webrtcManager.current) {
-        webrtcManager.current.signal(signalData);
+        webrtcManager.current.signal(fromUserId, signalData);
       }
     });
 
@@ -420,22 +462,37 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
             console.log('✅ Owner authentication complete, now updating socket in room...');
 
-            // 🔥 CRITICAL FIX: Ensure socket is connected before proceeding
-            const proceedWithSocketUpdate = () => {
-              console.log('📤 Emitting update-owner-socket event...');
-              // Add a small delay to ensure event listeners are fully attached
-              setTimeout(() => {
-                if (!isMountedRef.current) return;
+            // 🔥 CRITICAL FIX: Handle owner socket update more robustly
+            const proceedWithSocketUpdate = async () => {
+              try {
+                console.log('📤 Attempting to emit update-owner-socket event...');
+                
+                // Wait a bit to ensure everything is properly initialized
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                if (!isMountedRef.current) {
+                  console.log('⏭️ Component unmounted during socket update');
+                  return;
+                }
+                
+                console.log('📤 Emitting update-owner-socket event with:', { roomId, passcode });
                 socket.emit('update-owner-socket', { roomId, passcode });
-                initState.hasJoinedRoom = true; // Mark as joined AFTER successful emit
-                console.log('✅ Marked room as joined after successful socket update');
-              }, 100);
+                
+                initState.hasJoinedRoom = true;
+                console.log('✅ Successfully marked room as joined after owner socket update');
+                
+              } catch (error) {
+                console.log('❌ Error in owner socket update:', error);
+                // Don't mark as joined if there's an error - let it retry
+              }
             };
 
+            // Try to proceed immediately, but handle connection issues gracefully
             if (socket.connected) {
+              console.log('✅ Socket connected, proceeding with owner update');
               proceedWithSocketUpdate();
             } else {
-              console.log('⏳ Waiting for socket connection before updating owner socket...');
+              console.log('⏳ Socket not connected yet, will proceed when connected');
               socket.once('connect', proceedWithSocketUpdate);
             }
           })
@@ -503,7 +560,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
       // Clean up WebRTC
       if (webrtcManager.current) {
-        webrtcManager.current.cleanup();
+        webrtcManager.current.cleanupAll();
       }
 
       // Don't disconnect socket completely - just leave the room
@@ -603,8 +660,8 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       });
 
       // CRITICAL FIX: Set up remote stream callback BEFORE initiating call
-      webrtcManager.current.onRemoteStream((remoteStream) => {
-        console.log('📺 Received remote stream');
+      webrtcManager.current.onRemoteStream((remoteId, remoteStream) => {
+        console.log('📺 Received remote stream from', remoteId);
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
         }
@@ -620,7 +677,9 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       const socket = getSocket();
       socket.emit('start-call', { roomId, callType });
 
-      await webrtcManager.current.initiateCall(true);
+      // Note: MultiPeerManager doesn't have a global initiateCall method
+      // It uses initiateCallTo for specific peers
+      console.log('📞 Call initiated - MultiPeerManager will handle peer connections as needed');
     } catch (error: any) {
       console.error('Error starting call:', error);
       const errorMessage = error?.message || 'Failed to start call. Please check camera/microphone permissions.';
@@ -645,9 +704,10 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         localStream: stream
       });
 
-      await webrtcManager.current.initiateCall(false);
+      // Note: MultiPeerManager uses initiateCallTo for specific peers
+      // The call will be handled when the other peer responds
 
-      webrtcManager.current.onRemoteStream((remoteStream) => {
+      webrtcManager.current.onRemoteStream((remoteId, remoteStream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = remoteStream;
         }
@@ -675,7 +735,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
   const endCall = (emitToServer: boolean = true) => {
     if (webrtcManager.current) {
-      webrtcManager.current.cleanup();
+      webrtcManager.current.cleanupAll();
     }
 
     if (localVideoRef.current) {
@@ -886,6 +946,49 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     }
   };
 
+  // 🔥 CRITICAL FIX: Detect refresh and ensure proper room state
+  useEffect(() => {
+    const currentRoomInitState = roomInitState.get(roomId);
+    if (userName && passcode && currentRoomInitState && !currentRoomInitState.hasJoinedRoom) {
+      console.log('🎯 REFRESH DETECTED - Ensuring proper room state');
+      console.log('📋 Current state - Users:', users.length, 'Messages:', messages.length);
+      console.log('👤 User credentials:', { userName, passcode, isOwner });
+      console.log('📍 Room init state:', currentRoomInitState);
+      
+      // Force refresh of room state
+      const socket = getSocket();
+      if (socket.connected) {
+        console.log('✅ Socket connected, forcing room state refresh');
+        
+        if (isOwner) {
+          console.log('👑 Owner detected, updating socket in room');
+          socket.emit('update-owner-socket', { roomId, passcode });
+        } else {
+          console.log('👤 Regular user, joining room with credentials');
+          const persistentUserId = localStorage.getItem('socketUserId');
+          socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+        }
+        
+        currentRoomInitState.hasJoinedRoom = true;
+      } else {
+        console.log('⏳ Socket not connected, will retry when connected');
+        socket.once('connect', () => {
+          if (!isMountedRef.current) return;
+          console.log('✅ Socket now connected, proceeding with refresh');
+          
+          if (isOwner) {
+            socket.emit('update-owner-socket', { roomId, passcode });
+          } else {
+            const persistentUserId = localStorage.getItem('socketUserId');
+            socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+          }
+          
+          currentRoomInitState.hasJoinedRoom = true;
+        });
+      }
+    }
+  }, [userName, passcode, isOwner, roomId]);
+
   // Prepare participants data for VideoGallery (exclude self, only show others)
   const participants = users.map(user => ({
     ...user,
@@ -918,40 +1021,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         onLeave={handleLeaveMeeting}
       />
 
-      {/* Debug Panel - Temporary for testing */}
-      <div style={{ 
-        position: 'fixed', 
-        top: '10px', 
-        right: '10px', 
-        background: 'rgba(0,0,0,0.8)', 
-        color: 'white', 
-        padding: '10px', 
-        borderRadius: '5px', 
-        zIndex: 1000,
-        fontSize: '12px',
-        minWidth: '150px'
-      }}>
-        <div style={{ marginBottom: '5px', fontWeight: 'bold' }}>Debug Panel</div>
-        <div>Socket: {connectionStatus === 'connected' ? '✅' : connectionStatus === 'connecting' ? '🔄' : '❌'} {getSocket().id?.slice(-6) || 'none'}</div>
-        <div>Users: {users.length}</div>
-        <div>Room: {roomId.slice(-6)}</div>
-        <button 
-          onClick={testSocketConnection}
-          style={{ 
-            background: connectionStatus === 'connected' ? '#28a745' : '#007bff', 
-            color: 'white', 
-            border: 'none', 
-            padding: '5px 10px', 
-            borderRadius: '3px',
-            fontSize: '10px',
-            cursor: 'pointer',
-            width: '100%',
-            marginTop: '5px'
-          }}
-        >
-          {connectionStatus === 'connected' ? 'Test Socket' : connectionStatus === 'connecting' ? 'Connecting...' : 'Reconnect'}
-        </button>
-      </div>
+      
 
       {/* Main Content Area */}
       <div className="meeting-content">

@@ -50,7 +50,7 @@ class SocketManager {
         if (reason === 'io client disconnect' || reason === 'transport close') {
           console.log(`🔄 Attempting to reconnect socket for user ${userId}...`);
           setTimeout(() => {
-            if (!socket.connected && !socket.connecting) {
+            if (!socket.connected) {
               socket.connect();
             }
           }, 1000);
@@ -114,8 +114,8 @@ export const getSocket = (): Socket => {
   const userId = getUserId();
   const socket = socketManager.getSocket(userId);
   
-  // Ensure socket is connected or connecting
-  if (!socket.connected && !socket.connecting) {
+  // Ensure socket is connected
+  if (!socket.connected) {
     console.log('🔌 Socket not connected, connecting...');
     socket.connect();
   }
