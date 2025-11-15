@@ -46,6 +46,15 @@ class SocketManager {
 
       socket.on('disconnect', (reason) => {
         console.log(`🔌 Socket disconnected for user ${userId}, reason:`, reason);
+        // Auto-reconnect on certain disconnect reasons
+        if (reason === 'io client disconnect' || reason === 'transport close') {
+          console.log(`🔄 Attempting to reconnect socket for user ${userId}...`);
+          setTimeout(() => {
+            if (!socket.connected && !socket.connecting) {
+              socket.connect();
+            }
+          }, 1000);
+        }
       });
 
       socket.on('connect_error', (error) => {
@@ -103,7 +112,15 @@ export const initializeSocket = (): Socket => {
 
 export const getSocket = (): Socket => {
   const userId = getUserId();
-  return socketManager.getSocket(userId);
+  const socket = socketManager.getSocket(userId);
+  
+  // Ensure socket is connected or connecting
+  if (!socket.connected && !socket.connecting) {
+    console.log('🔌 Socket not connected, connecting...');
+    socket.connect();
+  }
+  
+  return socket;
 };
 
 export const disconnectSocket = () => {
