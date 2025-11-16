@@ -1,18 +1,5 @@
 import React from 'react';
-
-interface Participant {
-  id: string;
-  name: string;
-  isHost: boolean;
-  isMuted?: boolean;
-  isVideoOff?: boolean;
-  isSpeaking?: boolean;
-}
-
-interface RemoteStream {
-  stream: MediaStream;
-  userName?: string;
-}
+import { MeetingParticipant, VideoStream } from '@/types';
 
 interface VideoGalleryProps {
   localStream: MediaStream | null;
@@ -20,8 +7,8 @@ interface VideoGalleryProps {
   localIsMuted: boolean;
   localIsVideoOff: boolean;
   localIsSpeaking: boolean;
-  participants: Participant[];
-  remoteStreams: Map<string, RemoteStream>;
+  participants: MeetingParticipant[];
+  remoteStreams: Map<string, VideoStream>;
   isHost: boolean;
 }
 

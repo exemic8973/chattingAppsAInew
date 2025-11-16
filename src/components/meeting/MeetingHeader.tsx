@@ -1,10 +1,7 @@
 import React from 'react';
+import { MeetingHeaderInfo } from '@/types';
 
-interface MeetingHeaderProps {
-  roomId: string;
-  participantCount: number;
-  passcode: string;
-  isHost: boolean;
+interface MeetingHeaderProps extends MeetingHeaderInfo {
   onLeave: () => void;
 }
 

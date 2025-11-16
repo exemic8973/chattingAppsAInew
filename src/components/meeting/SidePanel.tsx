@@ -1,15 +1,7 @@
 import React from 'react';
-import { User, Message } from '@/types';
+import { ChatState, ParticipantManagement, ChangeEventHandler, KeyboardEventHandler } from '@/types';
 
-interface SidePanelProps {
-  messages: Message[];
-  participants: User[];
-  currentUserName: string;
-  currentUserId: string;
-  isHost: boolean;
-  newMessage: string;
-  onMessageChange: (message: string) => void;
-  onSendMessage: () => void;
+interface SidePanelProps extends ChatState, ParticipantManagement {
   onMuteParticipant: (userId: string) => void;
   hostMutedUsers: Set<string>;
 }
@@ -117,7 +109,7 @@ export default function SidePanel({
               <input 
                 type="text" 
                 value={newMessage}
-                onChange={(e) => onMessageChange(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => onMessageChange(e.target.value)}
                 placeholder="Type a message..."
                 style={{ 
                   flex: 1, 
@@ -125,7 +117,7 @@ export default function SidePanel({
                   border: '1px solid var(--meeting-border)', 
                   borderRadius: 'var(--radius-sm)'
                 }}
-                onKeyPress={(e) => e.key === 'Enter' && onSendMessage()}
+                onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && onSendMessage()}
                 aria-label="Message input"
               />
               <button 

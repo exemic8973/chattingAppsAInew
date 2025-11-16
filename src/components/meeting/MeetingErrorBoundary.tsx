@@ -46,7 +46,7 @@ export default class MeetingErrorBoundary extends React.Component<
       errorMessage: error.message || 'An unexpected error occurred',
       errorType: 'UNKNOWN_ERROR',
       canRetry: true,
-      context: errorInfo.componentStack,
+      context: errorInfo.componentStack || undefined,
     };
 
     this.setState({ error: meetingError });

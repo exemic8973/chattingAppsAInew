@@ -1,14 +1,7 @@
 import React from 'react';
+import { MeetingControls as MeetingControlsState, MeetingCallbacks } from '@/types';
 
-interface MeetingControlsProps {
-  isMuted: boolean;
-  isVideoOff: boolean;
-  onToggleMute: () => void;
-  onToggleVideo: () => void;
-  onToggleChat: () => void;
-  onToggleParticipants: () => void;
-  onLeaveMeeting: () => void;
-}
+interface MeetingControlsProps extends MeetingControlsState, MeetingCallbacks {}
 
 export default function MeetingControls({ 
   isMuted, 

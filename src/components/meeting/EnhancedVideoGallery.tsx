@@ -305,7 +305,7 @@ export default function EnhancedVideoGallery({
               {/* Local Video Tile */}
               <VideoTile
                 participant={localParticipant}
-                stream={localStream}
+                stream={localStream || undefined}
                 isLocal={true}
                 onError={handleStreamError}
                 onRetry={handleRetry}
@@ -355,7 +355,7 @@ export default function EnhancedVideoGallery({
             {/* Local Video Tile */}
             <VideoTile
               participant={localParticipant}
-              stream={localStream}
+              stream={localStream || undefined}
               isLocal={true}
               onError={handleStreamError}
               onRetry={handleRetry}

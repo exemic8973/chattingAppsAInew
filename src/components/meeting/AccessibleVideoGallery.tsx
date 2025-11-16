@@ -12,6 +12,7 @@ interface AccessibleVideoGalleryProps {
   remoteStreams: Map<string, VideoStream>;
   isHost: boolean;
   gridSize?: 'small' | 'medium' | 'large';
+  isScreenReaderOptimized?: boolean;
 }
 
 interface VideoTileProps {
@@ -195,15 +196,16 @@ const VideoTile: React.FC<VideoTileProps> = ({
 };
 
 export default function AccessibleVideoGallery({ 
-  localStream, 
-  localUserName, 
-  localIsMuted, 
-  localIsVideoOff, 
-  localIsSpeaking, 
-  participants, 
-  remoteStreams, 
+  localStream,
+  localUserName,
+  localIsMuted,
+  localIsVideoOff,
+  localIsSpeaking,
+  participants,
+  remoteStreams,
   isHost,
-  gridSize = 'medium'
+  gridSize = 'medium',
+  isScreenReaderOptimized = true
 }: AccessibleVideoGalleryProps) {
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
@@ -372,7 +374,7 @@ export default function AccessibleVideoGallery({
           <VideoTile
             key={participant.id}
             participant={participant}
-            stream={participant.id === 'local' ? localStream : remoteStream?.stream}
+            stream={participant.id === 'local' ? localStream || undefined : remoteStream?.stream}
             isLocal={participant.id === 'local'}
             onSelect={handleSelectParticipant}
             isSelected={selectedParticipantId === participant.id}
