@@ -1,46 +1,59 @@
-import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { userStore } from '@/lib/userStore';
+import { NextRequest } from 'next/server';
+import { withRequiredAuth } from '@/lib/middleware/auth';
+import { getUserRepository } from '@/lib/repositories/RepositoryFactory';
+import { ApiResponse } from '@/lib/api/response';
+import { getCurrentUser } from '@/lib/middleware/auth';
+import { AuthenticatedRequest } from '@/lib/middleware/auth';
+import { getCorrelationId } from '@/lib/api/response';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
-export async function GET(request: NextRequest) {
+/**
+ * Get current authenticated user
+ */
+async function handleGetMe(request: AuthenticatedRequest) {
+  const correlationId = getCorrelationId(request);
+  
   try {
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.split(' ')[1];
-
-    if (!token) {
-      return NextResponse.json(
-        { message: 'No token provided' },
-        { status: 401 }
+    const currentUser = getCurrentUser(request);
+    if (!currentUser) {
+      return ApiResponse.unauthorized(
+        'User not authenticated',
+        'NOT_AUTHENTICATED',
+        undefined,
+        correlationId
       );
     }
 
-    // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
-    const user = await userStore.findByEmail(decoded.email);
-
+    const userRepository = getUserRepository();
+    
+    // Get user by ID (safe method - without password)
+    const user = await userRepository.findByIdSafe(currentUser.id);
     if (!user) {
-      return NextResponse.json(
-        { message: 'User not found' },
-        { status: 404 }
+      return ApiResponse.notFound(
+        'User not found',
+        'USER_NOT_FOUND',
+        undefined,
+        correlationId
       );
     }
 
-    return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        userName: user.userName,
-        createdAt: user.createdAt
-      }
-    });
+    return ApiResponse.success(
+      { user },
+      'User retrieved successfully',
+      correlationId
+    );
 
   } catch (error) {
     console.error('Get user error:', error);
-    return NextResponse.json(
-      { message: 'Invalid token' },
-      { status: 401 }
+    return ApiResponse.internalError(
+      'Failed to retrieve user information',
+      'GET_USER_ERROR',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      correlationId
     );
   }
 }
+
+/**
+ * Export authenticated endpoint
+ */
+export const GET = withRequiredAuth(handleGetMe);

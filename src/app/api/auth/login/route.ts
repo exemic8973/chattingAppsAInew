@@ -1,68 +1,82 @@
-import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { userStore } from '@/lib/userStore';
+import { NextRequest } from 'next/server';
+import { generateToken } from '@/lib/auth';
+import { getUserRepository } from '@/lib/repositories/RepositoryFactory';
+import { ApiResponse } from '@/lib/api/response';
+import { withValidation } from '@/lib/validation/auth';
+import { loginSchema } from '@/lib/validation/auth';
+import { authRateLimiter } from '@/lib/middleware/rateLimit';
+import { applyRateLimit } from '@/lib/middleware/rateLimit';
+import { getCorrelationId } from '@/lib/api/response';
+import { User } from '@/lib/repositories/UserRepository';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+/**
+ * Apply rate limiting to login endpoint
+ */
+const rateLimitMiddleware = applyRateLimit(authRateLimiter);
 
-console.log('🔐 Login API JWT_SECRET configured:', JWT_SECRET ? 'Yes (length: ' + JWT_SECRET.length + ')' : 'No');
-
+/**
+ * Handle login request with validation and rate limiting
+ */
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+
   try {
-    const { email, password } = await request.json();
-
-    console.log('🔑 Login request received for:', email);
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { message: 'Email and password are required' },
-        { status: 400 }
-      );
+    // Apply rate limiting
+    const rateLimitResult = await rateLimitMiddleware(request);
+    if (rateLimitResult) {
+      return rateLimitResult;
     }
 
-    // Validate credentials using userStore
-    const isValid = await userStore.validatePassword(email, password);
-    if (!isValid) {
-      console.log('❌ Invalid credentials for:', email);
-      return NextResponse.json(
-        { message: 'Invalid credentials' },
-        { status: 401 }
-      );
+    // Validate request body
+    const validationResult = await withValidation(loginSchema)(request);
+    if (!validationResult.success) {
+      return validationResult.response;
     }
 
-    const user = await userStore.findByEmail(email);
+    const { email, password } = validationResult.data;
+    const userRepository = getUserRepository();
+
+    // Validate user credentials
+    const user = await userRepository.validatePassword(email, password);
     if (!user) {
-      console.log('❌ User not found:', email);
-      return NextResponse.json(
-        { message: 'User not found' },
-        { status: 404 }
+      return ApiResponse.unauthorized(
+        'Invalid email or password',
+        'INVALID_CREDENTIALS',
+        undefined,
+        correlationId
       );
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, userName: user.userName },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    console.log('✅ Login successful for:', email);
-
-    return NextResponse.json({
-      message: 'Login successful',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        userName: user.userName
-      }
+    // Generate JWT token with user ID
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName
     });
 
+    // Return safe user data (without password)
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName
+    };
+
+    return ApiResponse.success(
+      {
+        token,
+        user: safeUser
+      },
+      'Login successful',
+      correlationId
+    );
+
   } catch (error) {
-    console.error('💥 Login error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      { message: 'Internal server error', error: errorMessage },
-      { status: 500 }
+    console.error('Login error:', error);
+    return ApiResponse.internalError(
+      'An error occurred during login',
+      'LOGIN_ERROR',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      correlationId
     );
   }
 }

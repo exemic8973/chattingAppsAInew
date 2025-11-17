@@ -3,6 +3,7 @@ import { ChatState, ParticipantManagement, ChangeEventHandler, KeyboardEventHand
 
 interface SidePanelProps extends ChatState, ParticipantManagement {
   onMuteParticipant: (userId: string) => void;
+  onRemoveParticipant?: (userId: string) => void;
   hostMutedUsers: Set<string>;
 }
 
@@ -16,6 +17,7 @@ export default function SidePanel({
   onMessageChange, 
   onSendMessage, 
   onMuteParticipant, 
+  onRemoveParticipant,
   hostMutedUsers 
 }: SidePanelProps) {
   const [activeTab, setActiveTab] = React.useState<'chat' | 'participants'>('chat');
@@ -159,15 +161,32 @@ export default function SidePanel({
                 </div>
               </div>
               {isHost && (
-                <button 
-                  onClick={() => onMuteParticipant(participant.id)}
-                  className={`meeting-button meeting-button-${hostMutedUsers.has(participant.id) ? 'success' : 'warning'}`}
-                  style={{ fontSize: '12px' }}
-                  aria-label={`${hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'} ${participant.name}`}
-                >
-                  <i className={`bi ${hostMutedUsers.has(participant.id) ? 'bi-mic' : 'bi-mic-mute'} meeting-icon`}></i>
-                  {hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'}
-                </button>
+                <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+                  <button 
+                    onClick={() => onMuteParticipant(participant.id)}
+                    className={`meeting-button meeting-button-${hostMutedUsers.has(participant.id) ? 'success' : 'warning'}`}
+                    style={{ fontSize: '12px' }}
+                    aria-label={`${hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'} ${participant.name}`}
+                  >
+                    <i className={`bi ${hostMutedUsers.has(participant.id) ? 'bi-mic' : 'bi-mic-mute'} meeting-icon`}></i>
+                    {hostMutedUsers.has(participant.id) ? 'Unmute' : 'Mute'}
+                  </button>
+                  {!participant.isHost && onRemoveParticipant && (
+                    <button 
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to remove ${participant.name} from the meeting?`)) {
+                          onRemoveParticipant(participant.id);
+                        }
+                      }}
+                      className="meeting-button meeting-button-danger"
+                      style={{ fontSize: '12px' }}
+                      aria-label={`Remove ${participant.name} from meeting`}
+                    >
+                      <i className="bi bi-person-x meeting-icon"></i>
+                      Remove
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ))}

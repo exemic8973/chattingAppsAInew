@@ -9,7 +9,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [userName, setUserName] = useState('');
+  const [fullName, setFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { t } = useLanguage();
@@ -17,46 +17,92 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email.trim() || !password.trim() || !userName.trim()) {
+    console.log('🚀 Signup form submitted!');
+    console.log('Form data before validation:');
+    console.log('Email:', email);
+    console.log('Password:', password?.substring(0, 3) + '***');
+    console.log('Full Name:', fullName);
+    console.log('Confirm Password:', confirmPassword?.substring(0, 3) + '***');
+    
+    if (!email.trim() || !password.trim() || !fullName.trim()) {
+      console.log('❌ Validation failed: Required fields missing');
       alert(t('validation.required'));
       return;
     }
 
     if (password !== confirmPassword) {
+      console.log('❌ Validation failed: Passwords do not match');
       alert(t('validation.passwordMatch'));
       return;
     }
 
     if (password.length < 6) {
+      console.log('❌ Validation failed: Password too short');
       alert(t('validation.password'));
+      return;
+    }
+
+    // Additional debugging - check fullName validation
+    if (fullName.length < 2) {
+      console.log('❌ Validation failed: Full name too short');
+      alert('Full name must be at least 2 characters long');
+      return;
+    }
+    
+    if (fullName.length > 50) {
+      console.log('❌ Validation failed: Full name too long');
+      alert('Full name must be less than 50 characters');
+      return;
+    }
+    
+    if (!/^[a-zA-Z\s\-\']+$/.test(fullName)) {
+      console.log('❌ Validation failed: Full name contains invalid characters');
+      alert('Full name can only contain letters, spaces, hyphens, and apostrophes');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/signup', {
+      const payload = {
+        email: email.trim(),
+        password: password,
+        fullName: fullName.trim(),
+        confirmPassword: confirmPassword
+      };
+      
+      console.log('📤 Sending to API:');
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      
+      const response = await fetch('http://localhost:3000/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          email,
-          password,
-          userName,
-        }),
+        body: JSON.stringify(payload),
       });
 
+      console.log('📊 API Response status:', response.status);
+      
       const data = await response.json();
+      console.log('📋 API Response data:', data);
 
       if (response.ok) {
+        console.log('✅ Signup successful!');
         alert(t('success'));
         router.push('/login');
       } else {
-        alert(data.message || t('error.server'));
+        console.log('❌ Signup failed:', data.message);
+        console.log('Error details:', data.error);
+        if (data.error?.details) {
+          console.log('Validation errors:', JSON.stringify(data.error.details, null, 2));
+          alert('Signup failed:\n' + JSON.stringify(data.error.details, null, 2));
+        } else {
+          alert(data.message || t('error.server'));
+        }
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('❌ Network/Server error:', error);
       alert(t('error.network'));
     } finally {
       setIsLoading(false);
@@ -77,13 +123,13 @@ export default function SignupPage() {
 
           <form onSubmit={handleSignup}>
             <div className="mb-3">
-              <label htmlFor="userName" className="form-label">{t('signup.name')}</label>
+              <label htmlFor="fullName" className="form-label">{t('signup.name')}</label>
               <input
                 type="text"
                 className="form-control form-control-lg"
-                id="userName"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
+                id="fullName"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
                 placeholder={t('signup.name')}
                 required
               />

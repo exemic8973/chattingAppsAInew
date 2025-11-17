@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getSocket, initializeSocket } from '@/lib/socket';
-import { MultiPeerManager } from '@/lib/webrtc';
+import { EnhancedMultiPeerManager } from '@/lib/webrtc-enhanced';
 import { User, Message, CallState } from '@/types';
 import { formatTime, copyToClipboard } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -45,11 +45,20 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
   const [localIsSpeaking, setLocalIsSpeaking] = useState(false);
   const [hostMutedUsers, setHostMutedUsers] = useState<Set<string>>(new Set());
   const [isHostMuted, setIsHostMuted] = useState(false);
+  
+  // Enhanced Phase 2 features
+  const [peerConnectionInfo, setPeerConnectionInfo] = useState<Map<string, any>>(new Map());
+  const [connectionQuality, setConnectionQuality] = useState<Map<string, 'excellent' | 'good' | 'fair' | 'poor'>>(new Map());
+  const [speakingParticipants, setSpeakingParticipants] = useState<Set<string>>(new Set());
+  const [raisedHands, setRaisedHands] = useState<Set<string>>(new Set());
+  const [activeReactions, setActiveReactions] = useState<Array<{id: string, userId: string, reaction: string, timestamp: number}>>([]);
+  const [screenSharingUser, setScreenSharingUser] = useState<string | null>(null);
+  const [waitingParticipants, setWaitingParticipants] = useState<Array<{id: string, name: string, timestamp: number}>>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const webrtcManager = useRef<MultiPeerManager | null>(null);
+  const webrtcManager = useRef<EnhancedMultiPeerManager | null>(null);
   const isMountedRef = useRef(true); // Track if component is mounted
 
   useEffect(() => {
@@ -78,17 +87,17 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       console.log('🎯 Socket connection established, proceeding with setup...');
       
       // Continue with the rest of the setup logic
-      webrtcManager.current = new MultiPeerManager();
-      
-      // Set up WebRTC signal handler to relay signals via Socket.IO
-      webrtcManager.current.onSignal((payload) => {
-        console.log('📡 Emitting WebRTC signal to server:', payload);
-        socket.emit('webrtc-signal', {
-          roomId,
-          signalData: payload.signalData,
-          targetUserId: payload.to
-        });
+      webrtcManager.current = new EnhancedMultiPeerManager();
+    
+    // Set up WebRTC signal handler to relay signals via Socket.IO
+    webrtcManager.current.onSignal((payload) => {
+      console.log('📡 Emitting WebRTC signal to server:', payload);
+      socket.emit('webrtc-signal', {
+        roomId,
+        signalData: payload.signalData,
+        targetUserId: payload.to
       });
+    });
       
       // Continue with the rest of the setup...
       console.log('🎯 Socket connection setup completed');
@@ -133,7 +142,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       handleSocketConnected();
     }
 
-    webrtcManager.current = new MultiPeerManager();
+    webrtcManager.current = new EnhancedMultiPeerManager();
 
     // Set up WebRTC signal handler to relay signals via Socket.IO
     webrtcManager.current.onSignal((payload) => {
@@ -143,6 +152,43 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         signalData: payload.signalData,
         targetUserId: payload.to
       });
+    });
+
+    // Enhanced Phase 2 callback handlers
+    webrtcManager.current.onRemoteStream((remoteId, remoteStream, userName) => {
+      console.log('📺 Received remote stream from', remoteId, 'username:', userName);
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStream;
+      }
+      // Update call state to show we're in a call
+      setCallState(prev => ({
+        ...prev,
+        isCalling: false,
+        isInCall: true
+      }));
+    });
+
+    webrtcManager.current.onConnectionStateChange((remoteId, state) => {
+      console.log(`🔗 Connection state changed for ${remoteId}: ${state}`);
+      // Update peer connection info
+      setPeerConnectionInfo(prev => {
+        const newMap = new Map(prev);
+        newMap.set(remoteId, { state, timestamp: Date.now() });
+        return newMap;
+      });
+    });
+
+    webrtcManager.current.onQualityMetrics((remoteId, metrics) => {
+      console.log(`📊 Connection quality metrics for ${remoteId}:`, metrics);
+      // Update connection quality
+      const quality = webrtcManager.current?.getConnectionQuality(remoteId);
+      if (quality) {
+        setConnectionQuality(prev => {
+          const newMap = new Map(prev);
+          newMap.set(remoteId, quality);
+          return newMap;
+        });
+      }
     });
 
     // 🔐 CRITICAL FIX: Authenticate socket before joining room
@@ -356,6 +402,80 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         });
       }
     });
+
+    // Enhanced Phase 2 socket event listeners
+    socket.on('participant-joined-waiting', (data: { userId: string; userName: string; timestamp: number }) => {
+      console.log('👤 Participant joined waiting room:', data);
+      setWaitingParticipants(prev => [...prev, data]);
+    });
+
+    socket.on('participant-left-waiting', (data: { userId: string }) => {
+      console.log('👤 Participant left waiting room:', data);
+      setWaitingParticipants(prev => prev.filter(p => p.id !== data.userId));
+    });
+
+    socket.on('hand-raised', (data: { userId: string; userName: string }) => {
+      console.log('✋ Hand raised:', data);
+      setRaisedHands(prev => new Set(prev).add(data.userId));
+    });
+
+    socket.on('hand-lowered', (data: { userId: string }) => {
+      console.log('👇 Hand lowered:', data);
+      setRaisedHands(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(data.userId);
+        return newSet;
+      });
+    });
+
+    socket.on('reaction-sent', (data: { userId: string; userName: string; reaction: string; timestamp: number }) => {
+      console.log('😊 Reaction sent:', data);
+      const reactionId = `${data.userId}-${Date.now()}`;
+      setActiveReactions(prev => [...prev, {
+        id: reactionId,
+        userId: data.userId,
+        reaction: data.reaction,
+        timestamp: data.timestamp
+      }]);
+      
+      // Remove reaction after animation
+      setTimeout(() => {
+        setActiveReactions(prev => prev.filter(r => r.id !== reactionId));
+      }, 3000);
+    });
+
+    socket.on('screen-share-started', (data: { userId: string; userName: string }) => {
+      console.log('📺 Screen share started:', data);
+      setScreenSharingUser(data.userId);
+    });
+
+    socket.on('screen-share-stopped', (data: { userId: string }) => {
+      console.log('📺 Screen share stopped:', data);
+      setScreenSharingUser(null);
+    });
+
+    socket.on('speaking-status', (data: { userId: string; isSpeaking: boolean; audioLevel?: number }) => {
+      console.log('🎤 Speaking status:', data);
+      setSpeakingParticipants(prev => {
+        const newSet = new Set(prev);
+        if (data.isSpeaking) {
+          newSet.add(data.userId);
+        } else {
+          newSet.delete(data.userId);
+        }
+        return newSet;
+      });
+    });
+
+    socket.on('connection-quality', (data: { userId: string; quality: 'excellent' | 'good' | 'fair' | 'poor' }) => {
+      console.log('📊 Connection quality update:', data);
+      setConnectionQuality(prev => {
+        const newMap = new Map(prev);
+        newMap.set(data.userId, data.quality);
+        return newMap;
+      });
+    });
+
     } // End of if (!initState.listenersSetUp)
 
     // 🔥 CRITICAL FIX: Ensure event listeners are active BEFORE joining room
@@ -646,7 +766,11 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     try {
       if (!webrtcManager.current) return;
 
-      const stream = await webrtcManager.current.createLocalStream(callType === 'video');
+      // Enhanced stream creation with better error handling
+      const stream = await webrtcManager.current.createLocalStream({
+        video: callType === 'video',
+        audio: true
+      });
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
@@ -659,27 +783,10 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         localStream: stream
       });
 
-      // CRITICAL FIX: Set up remote stream callback BEFORE initiating call
-      webrtcManager.current.onRemoteStream((remoteId, remoteStream) => {
-        console.log('📺 Received remote stream from', remoteId);
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = remoteStream;
-        }
-        // Update state to show we're in a call - preserve localStream!
-        setCallState(prev => ({
-          ...prev,
-          isCalling: false,
-          isInCall: true,
-          localStream: prev.localStream || stream  // Make sure we keep the local stream
-        }));
-      });
-
       const socket = getSocket();
       socket.emit('start-call', { roomId, callType });
 
-      // Note: MultiPeerManager doesn't have a global initiateCall method
-      // It uses initiateCallTo for specific peers
-      console.log('📞 Call initiated - MultiPeerManager will handle peer connections as needed');
+      console.log('📞 Call initiated - EnhancedMultiPeerManager will handle multi-peer connections');
     } catch (error: any) {
       console.error('Error starting call:', error);
       const errorMessage = error?.message || 'Failed to start call. Please check camera/microphone permissions.';
@@ -759,6 +866,191 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     if (emitToServer) {
       const socket = getSocket();
       socket.emit('end-call', { roomId });
+    }
+  };
+
+  // Enhanced Phase 2 functions
+  const startScreenShare = async () => {
+    try {
+      if (!webrtcManager.current) return;
+      
+      const screenStream = await webrtcManager.current.startScreenShare();
+      setScreenSharingUser(userName); // Current user is sharing screen
+      
+      // Notify server about screen sharing
+      const socket = getSocket();
+      socket.emit('screen-share-started', { roomId, userId: getSocket().id, userName });
+      
+      console.log('📺 Screen sharing started');
+    } catch (error: any) {
+      console.error('❌ Error starting screen share:', error);
+      alert(`Failed to start screen sharing: ${error.message}`);
+    }
+  };
+
+  const stopScreenShare = () => {
+    if (!webrtcManager.current) return;
+    
+    webrtcManager.current.stopScreenShare();
+    setScreenSharingUser(null);
+    
+    // Notify server about screen sharing stopped
+    const socket = getSocket();
+    socket.emit('screen-share-stopped', { roomId, userId: getSocket().id });
+    
+    console.log('📺 Screen sharing stopped');
+  };
+
+  const sendReaction = (reaction: string) => {
+    const socket = getSocket();
+    const reactionId = `${socket.id}-${Date.now()}`;
+    
+    // Add reaction locally for immediate feedback
+    setActiveReactions(prev => [...prev, {
+      id: reactionId,
+      userId: socket.id || '',
+      reaction,
+      timestamp: Date.now()
+    }]);
+    
+    // Remove reaction after animation
+    setTimeout(() => {
+      setActiveReactions(prev => prev.filter(r => r.id !== reactionId));
+    }, 3000);
+    
+    // Send to server
+    socket.emit('send-reaction', { roomId, reaction, userId: getSocket().id, userName });
+    console.log('😊 Sent reaction:', reaction);
+  };
+
+  const raiseHand = () => {
+    const socket = getSocket();
+    const userId = socket.id || '';
+    
+    if (raisedHands.has(userId)) {
+      // Lower hand
+      socket.emit('lower-hand', { roomId, userId });
+      setRaisedHands(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    } else {
+      // Raise hand
+      socket.emit('raise-hand', { roomId, userId, userName });
+      setRaisedHands(prev => new Set(prev).add(userId));
+    }
+  };
+
+  const muteParticipant = async (targetUserId: string) => {
+    if (!isOwner) {
+      console.warn('Only hosts can mute participants');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/rooms/${roomId}/participants/${targetUserId}/mute`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({ reason: 'Host muted participant' })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to mute participant: ${response.statusText}`);
+      }
+      
+      console.log(`🔇 Muted participant ${targetUserId}`);
+    } catch (error: any) {
+      console.error('❌ Error muting participant:', error);
+      alert(`Failed to mute participant: ${error.message}`);
+    }
+  };
+
+  const removeParticipant = async (targetUserId: string) => {
+    if (!isOwner) {
+      console.warn('Only hosts can remove participants');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/rooms/${roomId}/participants/${targetUserId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({ reason: 'Host removed participant' })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to remove participant: ${response.statusText}`);
+      }
+      
+      console.log(`👋 Removed participant ${targetUserId}`);
+    } catch (error: any) {
+      console.error('❌ Error removing participant:', error);
+      alert(`Failed to remove participant: ${error.message}`);
+    }
+  };
+
+  const approveWaitingParticipant = async (waitingUserId: string) => {
+    if (!isOwner) {
+      console.warn('Only hosts can approve waiting participants');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/rooms/${roomId}/waiting-list`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({ userId: waitingUserId, action: 'approve' })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to approve participant: ${response.statusText}`);
+      }
+      
+      // Remove from waiting list
+      setWaitingParticipants(prev => prev.filter(p => p.id !== waitingUserId));
+      console.log(`✅ Approved waiting participant ${waitingUserId}`);
+    } catch (error: any) {
+      console.error('❌ Error approving participant:', error);
+      alert(`Failed to approve participant: ${error.message}`);
+    }
+  };
+
+  const rejectWaitingParticipant = async (waitingUserId: string) => {
+    if (!isOwner) {
+      console.warn('Only hosts can reject waiting participants');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/rooms/${roomId}/waiting-list`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({ userId: waitingUserId })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to reject participant: ${response.statusText}`);
+      }
+      
+      // Remove from waiting list
+      setWaitingParticipants(prev => prev.filter(p => p.id !== waitingUserId));
+      console.log(`❌ Rejected waiting participant ${waitingUserId}`);
+    } catch (error: any) {
+      console.error('❌ Error rejecting participant:', error);
+      alert(`Failed to reject participant: ${error.message}`);
     }
   };
 
@@ -1052,6 +1344,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
               onMessageChange={setNewMessage}
               onSendMessage={sendMessage}
               onMuteParticipant={handleMuteParticipant}
+              onRemoveParticipant={removeParticipant}
               hostMutedUsers={hostMutedUsers}
             />
           </div>

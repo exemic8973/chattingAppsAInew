@@ -1,72 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import jwt from 'jsonwebtoken';
-import { userStore } from '@/lib/userStore';
+import { NextRequest } from 'next/server';
+import { generateToken } from '@/lib/auth';
+import { getUserRepository } from '@/lib/repositories/RepositoryFactory';
+import { ApiResponse } from '@/lib/api/response';
+import { withValidation } from '@/lib/validation/auth';
+import { signupSchema } from '@/lib/validation/auth';
+import { getCorrelationId } from '@/lib/api/response';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-
+/**
+ * Handle signup request with validation
+ */
 export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
+
   try {
-    const { email, password, userName } = await request.json();
-
-    console.log('📝 Signup request received for:', email);
-
-    if (!email || !password || !userName) {
-      return NextResponse.json(
-        { message: 'Email, password, and name are required' },
-        { status: 400 }
-      );
+    // Validate request body
+    const validationResult = await withValidation(signupSchema)(request);
+    if (!validationResult.success) {
+      return validationResult.response;
     }
 
-    if (password.length < 6) {
-      return NextResponse.json(
-        { message: 'Password must be at least 6 characters' },
-        { status: 400 }
-      );
-    }
+    const { email, password, fullName } = validationResult.data;
+    const userRepository = getUserRepository();
 
-    // Create user using userStore
-    try {
-      const user = await userStore.createUser(email, password, userName);
-      console.log('✅ User created successfully:', user.email);
+    // Create user with password hashing
+    const user = await userRepository.create({
+      email,
+      password,
+      fullName
+    });
 
-      // Generate JWT token
-      const token = jwt.sign(
-        { userId: user.id, email: user.email, userName: user.userName },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
+    // Generate JWT token
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName
+    });
 
-      return NextResponse.json({
-        message: 'User created successfully',
+    // Return safe user data (without password)
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      fullName: user.fullName
+    };
+
+    return ApiResponse.success(
+      {
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          userName: user.userName
-        }
-      });
-    } catch (userError) {
-      const errorMessage = userError instanceof Error ? userError.message : 'Unknown error';
-      console.error('❌ User creation error:', errorMessage);
-
-      // Check if it's a "User already exists" error
-      if (errorMessage.includes('already exists')) {
-        return NextResponse.json(
-          { message: 'User with this email already exists' },
-          { status: 409 }
-        );
-      }
-
-      // Re-throw to outer catch
-      throw userError;
-    }
+        user: safeUser
+      },
+      'User created successfully',
+      correlationId
+    );
 
   } catch (error) {
-    console.error('💥 Signup error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json(
-      { message: 'Internal server error', error: errorMessage },
-      { status: 500 }
+    console.error('Signup error:', error);
+    
+    // Handle specific database errors
+    if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
+      return ApiResponse.conflict(
+        'User with this email already exists',
+        'USER_ALREADY_EXISTS',
+        undefined,
+        correlationId
+      );
+    }
+
+    return ApiResponse.internalError(
+      'An error occurred during signup',
+      'SIGNUP_ERROR',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      correlationId
     );
   }
 }

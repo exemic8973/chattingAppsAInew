@@ -1,64 +1,111 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { authenticateToken } from '@/lib/auth';
-import { v4 as uuidv4 } from 'uuid';
+import { NextRequest } from 'next/server';
+import { withRequiredAuth } from '@/lib/middleware/auth';
+import { getRoomRepository, getUserRepository } from '@/lib/repositories/RepositoryFactory';
+import { ApiResponse } from '@/lib/api/response';
+import { AuthenticatedRequest } from '@/lib/middleware/auth';
+import { getCurrentUser } from '@/lib/middleware/auth';
+import { getCorrelationId } from '@/lib/api/response';
+import { DatabaseError } from '@/lib/errors/ApiError';
 
-// In-memory room storage (replace with database in production)
-const rooms = new Map();
-
-export async function POST(request: NextRequest) {
+/**
+ * Create new room (authenticated endpoint)
+ */
+async function handleCreateAuthRoom(request: AuthenticatedRequest) {
+  const correlationId = getCorrelationId(request);
+  
   try {
-    // Authenticate the request
-    const authResult = await authenticateToken(request);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { message: 'Authentication required' },
-        { status: 401 }
+    const currentUser = getCurrentUser(request);
+    if (!currentUser) {
+      return ApiResponse.unauthorized(
+        'User not authenticated',
+        'NOT_AUTHENTICATED',
+        undefined,
+        correlationId
       );
     }
 
-    const { userName, passcode } = await request.json();
-    const user = authResult.user;
+    // Get request data
+    const body = await request.json().catch(() => ({}));
+    const { userName, passcode } = body;
 
-    if (!userName || !passcode) {
-      return NextResponse.json(
-        { message: 'User name and passcode are required' },
-        { status: 400 }
+    // Validate required fields
+    if (!userName) {
+      return ApiResponse.badRequest(
+        'User name is required',
+        'MISSING_USER_NAME',
+        undefined,
+        correlationId
       );
     }
 
-    // Create room
-    const roomId = uuidv4().substring(0, 8).toUpperCase();
-    // Handle case where user might be undefined
-    const createdBy = user?.id || 'unknown-user';
-    
-    const room = {
-      id: roomId,
-      passcode: passcode,
-      createdAt: new Date(),
-      createdBy: createdBy,
-      users: [{
-        id: 'temp-user-id',
-        name: userName,
-        isHost: true,
-        peerId: null,
-      }]
-    };
+    const roomRepository = getRoomRepository();
+    const userRepository = getUserRepository();
 
-    rooms.set(roomId, room);
+    // Get user details for creator information
+    const user = await userRepository.findById(currentUser.id);
+    if (!user) {
+      return ApiResponse.notFound(
+        'User not found',
+        'USER_NOT_FOUND',
+        undefined,
+        correlationId
+      );
+    }
 
-    return NextResponse.json({
-      message: 'Room created successfully',
-      roomId,
-      passcode,
-      shareUrl: `${process.env.NEXT_PUBLIC_CLIENT_URL || 'http://localhost:3000'}/room/${roomId}`,
-      room
+    // Create room with unique passcode
+    let roomPasscode = passcode;
+    if (!roomPasscode) {
+      roomPasscode = await roomRepository.generateUniquePasscode(6);
+    }
+
+    const room = await roomRepository.create({
+      passcode: roomPasscode,
+      creator: currentUser.email,
+      creatorName: userName
     });
+
+    return ApiResponse.success(
+      {
+        roomId: room.id,
+        passcode: room.passcode,
+        shareUrl: `${process.env.NEXT_PUBLIC_CLIENT_URL || 'http://localhost:3000'}/room/${room.id}`,
+        room: {
+          id: room.id,
+          passcode: room.passcode,
+          creator: room.creator,
+          creatorName: room.creatorName,
+          createdAt: room.createdAt
+        }
+      },
+      'Room created successfully',
+      correlationId
+    );
 
   } catch (error) {
     console.error('Room creation error:', error);
-    return NextResponse.json(
-      { message: 'Failed to create room' },
-      { status: 500 }
+
+    // Handle specific database errors
+    if (error instanceof DatabaseError) {
+      if (error.code === 'UNIQUE_CONSTRAINT_VIOLATION') {
+        return ApiResponse.conflict(
+          'Room with this passcode already exists',
+          'ROOM_PASSCODE_EXISTS',
+          undefined,
+          correlationId
+        );
+      }
+    }
+
+    return ApiResponse.internalError(
+      'Failed to create room',
+      'ROOM_CREATION_ERROR',
+      { error: error instanceof Error ? error.message : 'Unknown error' },
+      correlationId
     );
   }
 }
+
+/**
+ * Export authenticated endpoint
+ */
+export const POST = withRequiredAuth(handleCreateAuthRoom);

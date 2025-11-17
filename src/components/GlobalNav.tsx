@@ -17,7 +17,7 @@ export default function GlobalNav() {
 
   const handleLogout = () => {
     localStorage.removeItem('authToken');
-    localStorage.removeItem('userName');
+    localStorage.removeItem('fullName');
     localStorage.removeItem('userId');
     setIsAuthenticated(false);
     router.push('/');

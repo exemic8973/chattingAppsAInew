@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const next = require('next');
 const { userOps, roomOps, messageOps } = require('./database');
+const { setupPhase2SocketEvents } = require('./server-phase2-enhancements');
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = process.env.PORT || 3000;
@@ -466,10 +467,12 @@ nextApp.prepare().then(() => {
     });
 
     socket.on('mute-status', ({ roomId, isMuted }) => {
-      console.log('🔇 Mute status update in room:', roomId, 'Muted:', isMuted);
       // Broadcast mute status to all other participants in the room
       socket.to(roomId).emit('mute-status', { isMuted });
     });
+
+    // 🔥 PHASE 2 ENHANCEMENTS: Setup advanced socket events
+    setupPhase2SocketEvents(io, socket, rooms, connectedUsers);
 
     socket.on('disconnect', () => {
       console.log('🔌 User disconnected:', socket.id);

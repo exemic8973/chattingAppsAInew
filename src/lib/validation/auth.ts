@@ -15,20 +15,33 @@ const emailSchema = z
 // Base password validation with security requirements
 const passwordSchema = z
   .string()
-  .min(8, 'Password must be at least 8 characters long')
+  .min(6, 'Password must be at least 6 characters long')
   .max(128, 'Password must be less than 128 characters')
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-  .regex(/[0-9]/, 'Password must contain at least one number')
-  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+  // Relax requirements for development - only require basic complexity
+  .refine((password) => {
+    // In development, just require some basic complexity
+    if (process.env.NODE_ENV === 'development') {
+      return password.length >= 6;
+    }
+    // In production, require full complexity
+    return /[A-Z]/.test(password) && 
+           /[a-z]/.test(password) && 
+           /[0-9]/.test(password) && 
+           /[^A-Za-z0-9]/.test(password);
+  }, {
+    message: process.env.NODE_ENV === 'development' 
+      ? 'Password must be at least 6 characters' 
+      : 'Password must contain uppercase, lowercase, number, and special character'
+  });
 
-// Username validation
-const usernameSchema = z
+// Full name validation
+const fullNameSchema = z
   .string()
-  .min(3, 'Username must be at least 3 characters long')
-  .max(30, 'Username must be less than 30 characters')
-  .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores, and hyphens')
-  .transform(username => username.trim());
+  .min(2, 'Full name must be at least 2 characters long')
+  .max(50, 'Full name must be less than 50 characters')
+  // Allow spaces and common name characters
+  .regex(/^[a-zA-Z\s\-']+$/, 'Full name can only contain letters, spaces, hyphens, and apostrophes')
+  .transform(name => name.trim());
 
 /**
  * User signup validation schema
@@ -36,7 +49,7 @@ const usernameSchema = z
 export const signupSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
-  userName: usernameSchema,
+  fullName: fullNameSchema,
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -81,11 +94,11 @@ export const passwordResetSchema = z.object({
  * Update user profile validation schema
  */
 export const updateProfileSchema = z.object({
-  userName: usernameSchema.optional(),
+  fullName: fullNameSchema.optional(),
   email: emailSchema.optional()
-}).refine((data) => data.userName || data.email, {
+}).refine((data) => data.fullName || data.email, {
   message: "At least one field must be provided",
-  path: ["userName", "email"],
+  path: ["fullName", "email"],
 });
 
 /**
