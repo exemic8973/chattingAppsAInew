@@ -784,7 +784,10 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     if (!incomingCall || !webrtcManager.current) return;
 
     try {
-      const stream = await webrtcManager.current.createLocalStream(incomingCall.callType === 'video');
+      const stream = await webrtcManager.current.createLocalStream({
+        video: incomingCall.callType === 'video',
+        audio: true
+      });
 
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
