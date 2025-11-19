@@ -98,7 +98,7 @@ async function handleRequestJoin(request: NextRequest, context: { params: Promis
       if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.substring(7);
         const { verifyToken } = await import('@/lib/auth');
-        const decoded = verifyToken(token);
+        const decoded = await verifyToken(token);
         userId = decoded.id;
         userName = decoded.userName;
       } else {
