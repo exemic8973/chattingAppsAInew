@@ -54,9 +54,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Signup error:', error);
-    
+
     // Handle specific database errors
-    if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
+    if (error instanceof Error && (error.message?.includes('already exists') || error.message?.includes('duplicate'))) {
       return ApiResponse.conflict(
         'User with this email already exists',
         'USER_ALREADY_EXISTS',
