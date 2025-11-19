@@ -214,9 +214,9 @@ async function handleGetParticipant(request: AuthenticatedRequest, context: { pa
 }
 
 export async function DELETE(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string; userId: string }> }) {
-  return withRequiredAuth(handleRemoveParticipant)(request, context);
+  return handleRemoveParticipant(request, context);
 }
 
 export async function GET(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string; userId: string }> }) {
-  return withRequiredAuth(handleGetParticipant)(request, context);
+  return handleGetParticipant(request, context);
 }

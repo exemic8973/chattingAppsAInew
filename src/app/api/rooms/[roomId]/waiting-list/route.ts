@@ -458,7 +458,7 @@ async function handleRejectJoin(request: AuthenticatedRequest, context: { params
 }
 
 export async function GET(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string }> }) {
-  return withRequiredAuth(handleGetWaitingList)(request, context);
+  return handleGetWaitingList(request, context);
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ roomId: string }> }) {
@@ -466,9 +466,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ro
 }
 
 export async function PUT(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string }> }) {
-  return withRequiredAuth(handleApproveJoin)(request, context);
+  return handleApproveJoin(request, context);
 }
 
 export async function DELETE(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string }> }) {
-  return withRequiredAuth(handleRejectJoin)(request, context);
+  return handleRejectJoin(request, context);
 }

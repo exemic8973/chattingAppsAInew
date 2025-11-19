@@ -262,12 +262,12 @@ async function handleUnmuteParticipant(request: AuthenticatedRequest, context: {
  * Handle POST request (mute)
  */
 export async function POST(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string; userId: string }> }) {
-  return withRequiredAuth(handleMuteParticipant)(request, context);
+  return handleMuteParticipant(request, context);
 }
 
 /**
  * Handle DELETE request (unmute)
  */
 export async function DELETE(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string; userId: string }> }) {
-  return withRequiredAuth(handleUnmuteParticipant)(request, context);
+  return handleUnmuteParticipant(request, context);
 }
