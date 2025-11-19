@@ -3,7 +3,7 @@
  * Handles all user-related database operations
  */
 
-import { BaseRepository } from '@/lib/database/BaseRepository';
+import { BaseRepository, BaseEntity, PaginationOptions, PaginationResult } from '@/lib/database/BaseRepository';
 import { DatabaseConnection } from '@/lib/database/DatabaseConnection';
 import { DatabaseError } from '@/lib/errors/ApiError';
 import bcrypt from 'bcryptjs';
