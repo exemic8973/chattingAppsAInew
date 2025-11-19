@@ -219,6 +219,7 @@ export async function DELETE(request: AuthenticatedRequest, context: { params: P
 
 export async function GET(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string; userId: string }> }) {
   return withRequiredAuth(handleGetParticipant)(request, context);
+}
 
 /**
  * Export authenticated endpoints
