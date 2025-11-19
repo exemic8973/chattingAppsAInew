@@ -381,14 +381,6 @@ async function handleHostStopScreenShare(request: AuthenticatedRequest, context:
       isScreenSharing: false
     });
 
-    // Log the host action
-    await roomParticipantRepository.logHostAction({
-      roomId,
-      hostId: currentUser.id,
-      targetUserId: participant.userId,
-      actionType: 'stop_screen_share'
-    });
-
     return ApiResponse.success(
       {
         participantId: participant.id,
