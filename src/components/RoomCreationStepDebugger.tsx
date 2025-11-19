@@ -58,7 +58,8 @@ export default function RoomCreationStepDebugger() {
     addStep('Testing socket connection...');
     try {
       const { io } = await import('socket.io-client');
-      const socket = io('http://localhost:3001', {
+      const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+      const socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         timeout: 5000
       });

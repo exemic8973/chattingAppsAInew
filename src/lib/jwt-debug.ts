@@ -33,7 +33,8 @@ export const debugJWT = async () => {
     
     // Test backend directly
     console.log('🧪 Testing backend directly...');
-    const socket = io('http://localhost:3001', {
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+    const socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
       timeout: 5000
     });

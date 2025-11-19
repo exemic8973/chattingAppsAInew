@@ -6,21 +6,20 @@ class SocketManager {
   
   getSocket(userId: string): Socket {
     if (!this.sockets.has(userId)) {
-      // Automatically detect protocol and use same as current page
+      // Use NEXT_PUBLIC_SOCKET_URL if set, otherwise auto-detect
       let socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL;
 
       if (!socketUrl) {
-        // If no env var, auto-detect protocol from current page
+        // If no env var, auto-detect from current page
         if (typeof window !== 'undefined') {
           const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
           const hostname = window.location.hostname;
-          // For local development, connect to backend on port 3001
-          // For production, use the same host as frontend
-          const port = hostname === 'localhost' || hostname === '127.0.0.1' ? 3001 : window.location.port;
-          socketUrl = `${protocol}//${hostname}:${port}`;
+          const port = window.location.port;
+          // Use the same host and port as the current page (integrated server)
+          socketUrl = port ? `${protocol}//${hostname}:${port}` : `${protocol}//${hostname}`;
         } else {
           // SSR fallback
-          socketUrl = 'http://localhost:3001';
+          socketUrl = 'http://localhost:3000';
         }
       }
 

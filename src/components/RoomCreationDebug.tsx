@@ -31,7 +31,8 @@ export default function RoomCreationDebug() {
           // Test socket connection
           console.log('🔗 Testing socket connection...');
           const { io } = await import('socket.io-client');
-          const socket = io('http://localhost:3001');
+          const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+          const socket = io(socketUrl);
           
           socket.on('connect', () => {
             console.log('✅ Socket connected with ID:', socket.id);

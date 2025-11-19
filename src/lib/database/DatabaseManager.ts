@@ -5,28 +5,58 @@
 
 import { config } from '@/lib/config';
 import { DatabaseError } from '@/lib/errors/ApiError';
+import { PostgreSQLConnection, postgreSQLConfig } from './PostgreSQLConnection';
 
 // Import database drivers conditionally
 let pg: any, Pool: any, Client: any;
 let sqlite3: any, Database: any;
 
+// Track which database driver is available
+let availableDatabase: 'postgresql' | 'sqlite' | 'none' = 'none';
+
 if (config.isProduction) {
   try {
-    const pgModule = require('pg');
-    pg = pgModule;
-    Pool = pgModule.Pool;
-    Client = pgModule.Client;
+    // Check if PostgreSQL is configured
+    if (process.env.DATABASE_URL || (process.env.PGHOST && process.env.PGDATABASE)) {
+      console.log('🗄️ PostgreSQL configured for production');
+      availableDatabase = 'postgresql';
+    } else {
+      console.log('⚠️ PostgreSQL not configured, checking SQLite...');
+    }
+    
+    if (availableDatabase === 'postgresql') {
+      try {
+        const pgModule = require('pg');
+        pg = pgModule;
+        Pool = pgModule.Pool;
+        Client = pgModule.Client;
+        console.log('✅ PostgreSQL driver loaded');
+      } catch (error) {
+        console.warn('❌ PostgreSQL driver not available:', error);
+        availableDatabase = 'none';
+      }
+    }
   } catch (error) {
-    console.warn('PostgreSQL driver not available, falling back to SQLite');
+    console.warn('❌ PostgreSQL configuration error:', error);
   }
-} else {
+}
+
+// Fallback to SQLite if PostgreSQL not available or for development
+if (availableDatabase !== 'postgresql') {
   try {
     const sqliteModule = require('better-sqlite3');
     sqlite3 = sqliteModule;
     Database = sqliteModule;
+    availableDatabase = 'sqlite';
+    console.log('✅ SQLite driver loaded');
   } catch (error) {
-    console.warn('SQLite driver not available');
+    console.warn('❌ SQLite driver not available:', error);
+    availableDatabase = 'none';
   }
+}
+
+if (availableDatabase === 'none') {
+  console.error('❌ No database drivers available');
 }
 
 /**
@@ -54,177 +84,7 @@ export interface DatabaseTransaction {
   rollback(): Promise<void>;
 }
 
-/**
- * PostgreSQL connection implementation
- */
-class PostgreSQLConnection implements DatabaseConnection {
-  private pool: any;
-  private client: any;
 
-  constructor() {
-    const dbConfig = config.getDatabaseConfig();
-    const isLocalhost = this.isLocalhostConnection(dbConfig.url || dbConfig.getUrl());
-
-    this.pool = new Pool({
-      connectionString: dbConfig.url || dbConfig.getUrl(),
-      max: dbConfig.pool.max,
-      idleTimeoutMillis: dbConfig.pool.idleTimeoutMillis,
-      connectionTimeoutMillis: dbConfig.pool.connectionTimeoutMillis,
-      ssl: !isLocalhost ? { rejectUnauthorized: false } : false,
-      statement_timeout: 5000,
-      query_timeout: 5000
-    });
-
-    this.setupErrorHandling();
-  }
-
-  private isLocalhostConnection(connectionString: string): boolean {
-    return connectionString.includes('localhost') || 
-           connectionString.includes('127.0.0.1') ||
-           connectionString.includes('::1');
-  }
-
-  private setupErrorHandling(): void {
-    this.pool.on('error', (err: Error) => {
-      console.error('PostgreSQL pool error:', err);
-    });
-
-    this.pool.on('connect', () => {
-      console.log('PostgreSQL client connected');
-    });
-
-    this.pool.on('remove', () => {
-      console.log('PostgreSQL client removed');
-    });
-  }
-
-  async query(sql: string, params: any[] = []): Promise<any> {
-    try {
-      const result = await this.pool.query(sql, params);
-      return result.rows;
-    } catch (error) {
-      throw this.handleError(error, sql, params);
-    }
-  }
-
-  async queryOne(sql: string, params: any[] = []): Promise<any | null> {
-    try {
-      const result = await this.pool.query(sql, params);
-      return result.rows[0] || null;
-    } catch (error) {
-      throw this.handleError(error, sql, params);
-    }
-  }
-
-  async queryAll(sql: string, params: any[] = []): Promise<any[]> {
-    return this.query(sql, params);
-  }
-
-  async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertRowid?: number }> {
-    try {
-      const result = await this.pool.query(sql, params);
-      return { 
-        changes: result.rowCount || 0,
-        lastInsertRowid: result.rows[0]?.id || result.insertId
-      };
-    } catch (error) {
-      throw this.handleError(error, sql, params);
-    }
-  }
-
-  async beginTransaction(): Promise<DatabaseTransaction> {
-    const client = await this.pool.connect();
-    await client.query('BEGIN');
-    return new PostgreSQLTransaction(client);
-  }
-
-  async close(): Promise<void> {
-    await this.pool.end();
-  }
-
-  async isHealthy(): Promise<boolean> {
-    try {
-      await this.pool.query('SELECT 1');
-      return true;
-    } catch (error) {
-      console.error('PostgreSQL health check failed:', error);
-      return false;
-    }
-  }
-
-  private handleError(error: any, sql: string, params: any[]): DatabaseError {
-    console.error('PostgreSQL query error:', {
-      error: error.message,
-      sql: sql.substring(0, 200), // Log first 200 chars of SQL
-      params: params
-    });
-
-    if (error.code === '23505') { // Unique violation
-      return DatabaseError.uniqueConstraintViolation(
-        error.detail || 'Unique constraint violation',
-        { sql, params, originalError: error }
-      );
-    }
-
-    if (error.code === '23503') { // Foreign key violation
-      return DatabaseError.foreignKeyViolation(
-        error.detail || 'Foreign key constraint violation',
-        { sql, params, originalError: error }
-      );
-    }
-
-    if (error.code === '42703') { // Undefined column
-      return DatabaseError.queryFailed(
-        'Invalid column reference',
-        { sql, params, originalError: error }
-      );
-    }
-
-    return DatabaseError.queryFailed(
-      error.message || 'Database query failed',
-      { sql, params, originalError: error }
-    );
-  }
-}
-
-/**
- * PostgreSQL transaction implementation
- */
-class PostgreSQLTransaction implements DatabaseTransaction {
-  constructor(private client: any) {}
-
-  async query(sql: string, params: any[] = []): Promise<any> {
-    const result = await this.client.query(sql, params);
-    return result.rows;
-  }
-
-  async queryOne(sql: string, params: any[] = []): Promise<any | null> {
-    const result = await this.client.query(sql, params);
-    return result.rows[0] || null;
-  }
-
-  async queryAll(sql: string, params: any[] = []): Promise<any[]> {
-    return this.query(sql, params);
-  }
-
-  async execute(sql: string, params: any[] = []): Promise<{ changes: number; lastInsertRowid?: number }> {
-    const result = await this.client.query(sql, params);
-    return { 
-      changes: result.rowCount || 0,
-      lastInsertRowid: result.rows[0]?.id || result.insertId
-    };
-  }
-
-  async commit(): Promise<void> {
-    await this.client.query('COMMIT');
-    this.client.release();
-  }
-
-  async rollback(): Promise<void> {
-    await this.client.query('ROLLBACK');
-    this.client.release();
-  }
-}
 
 /**
  * SQLite connection implementation
@@ -366,18 +226,36 @@ class SQLiteTransaction implements DatabaseTransaction {
 /**
  * Database manager singleton
  */
-class DatabaseManager {
+export class DatabaseManager {
   private static instance: DatabaseManager;
   private connection: DatabaseConnection;
+  private databaseType: 'postgresql' | 'sqlite';
 
-  private constructor() {
-    if (config.isProduction && pg) {
+  constructor() {
+    this.databaseType = this.detectDatabaseType();
+    
+    if (this.databaseType === 'postgresql') {
       this.connection = new PostgreSQLConnection();
-    } else if (sqlite3) {
+    } else if (this.databaseType === 'sqlite') {
       this.connection = new SQLiteConnection();
     } else {
-      throw new Error('No database driver available');
+      throw new Error('No database drivers available');
     }
+  }
+
+  private detectDatabaseType(): 'postgresql' | 'sqlite' {
+    // Check if PostgreSQL is configured for production
+    if (config.isProduction && (process.env.DATABASE_URL || (process.env.PGHOST && process.env.PGDATABASE))) {
+      return 'postgresql';
+    }
+    return 'sqlite';
+  }
+
+  /**
+   * Get current database type
+   */
+  getDatabaseType(): 'postgresql' | 'sqlite' {
+    return this.databaseType;
   }
 
   static getInstance(): DatabaseManager {

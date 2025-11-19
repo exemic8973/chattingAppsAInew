@@ -9,8 +9,11 @@ const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const next = require('next');
+const rateLimit = require('express-rate-limit');
 const { userOps, roomOps, messageOps } = require('./database');
 const { setupPhase2SocketEvents } = require('./server-phase2-enhancements');
+const SecurityMiddleware = require('./src/lib/security/middleware');
+const ValidationSchemas = require('./src/lib/security/validation');
 
 const dev = process.env.NODE_ENV !== 'production';
 const port = process.env.PORT || 3000;
@@ -58,27 +61,61 @@ const createRoom = (roomId, passcode, creator, creatorName) => {
 nextApp.prepare().then(() => {
   const app = express();
 
+  // Initialize security middleware
+  const security = new SecurityMiddleware();
+
   // Trust proxy - CRITICAL for Zeabur/reverse proxy platforms
   app.set('trust proxy', 1);
 
   const httpServer = createServer(app);
 
-  // Don't use global middleware that consumes request body
-  // Next.js needs to handle its own requests without interference
+  // Security headers for all requests
+  app.use(security.setSecurityHeaders);
 
-  // Socket.io setup
+  // Rate limiting
+  const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+  });
+
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5, // 5 attempts per windowMs
+    message: 'Too many authentication attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+  });
+
+  const socketLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50, // 50 connection attempts per windowMs
+    message: 'Too many connection attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+  });
+
+  // Apply general rate limiting
+  app.use(generalLimiter);
+
+  // Audit logging
+  app.use(security.auditLog);
+
+  // Enhanced CORS configuration
+  const corsConfig = security.getCorsConfig();
+
+  // Socket.io setup with enhanced CORS
   const io = new Server(httpServer, {
-    cors: {
-      origin: process.env.NODE_ENV === 'production'
-        ? process.env.CLIENT_URL || '*'
-        : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'],
-      methods: ["GET", "POST"],
-      credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization"]
-    },
+    cors: corsConfig,
     transports: ['websocket', 'polling'],
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    maxHttpBufferSize: 1e6 // 1MB
   });
 
   // Socket.IO connection handling
@@ -476,14 +513,49 @@ nextApp.prepare().then(() => {
 
     socket.on('disconnect', () => {
       console.log('🔌 User disconnected:', socket.id);
+      
+      // Find and remove user from all rooms they were in
+      for (const [roomId, participants] of roomParticipants.entries()) {
+        const participantIndex = participants.findIndex(p => p.socketId === socket.id);
+        
+        if (participantIndex !== -1) {
+          const participant = participants[participantIndex];
+          console.log(`👤 User ${participant.name} left room ${roomId}`);
+          
+          // Remove participant from room
+          participants.splice(participantIndex, 1);
+          
+          // Notify other users in the room
+          socket.to(roomId).emit('user-left', {
+            userName: participant.name,
+            userId: participant.id,
+            participantCount: participants.length
+          });
+          
+          console.log(`📢 Notified room ${roomId} that ${participant.name} left`);
+          
+          // If room is empty, optionally clean it up
+          if (participants.length === 0) {
+            console.log(`🏠 Room ${roomId} is now empty`);
+            roomParticipants.delete(roomId);
+          }
+          
+          break; // User can only be in one room at a time
+        }
+      }
+      
+      // Clean up user session
       if (socket.userId) {
         userSessions.delete(socket.userId);
       }
+      
+      connectedUsers.delete(socket.id);
+      console.log(`🧹 Cleaned up user session for ${socket.id}`);
     });
   });
 
   // Health check endpoint - simple, no middleware
-  app.get('/api/health', async (req, res) => {
+  app.get('/api/health', generalLimiter, async (req, res) => {
     try {
       res.setHeader('Content-Type', 'application/json');
       const allRooms = await roomOps.getAll();
@@ -494,7 +566,13 @@ nextApp.prepare().then(() => {
         totalRooms: allRooms.length,
         activeRooms: Array.from(roomParticipants.keys()),
         connectedUsers: io.engine.clientsCount,
-        dbStatus: 'connected'
+        dbStatus: 'connected',
+        security: {
+          cors: 'enabled',
+          rateLimiting: 'enabled',
+          securityHeaders: 'enabled',
+          ip: req.ip
+        }
       }));
     } catch (error) {
       console.error('Health check error:', error);
@@ -504,6 +582,31 @@ nextApp.prepare().then(() => {
         dbStatus: 'error'
       });
     }
+  });
+
+  // Error handler for security middleware
+  app.use((err, req, res, next) => {
+    if (err.name === 'CorsError' || err.message?.includes('not allowed by CORS')) {
+      return res.status(403).json({
+        error: 'CORS policy violation',
+        message: 'Origin not allowed',
+        security: true
+      });
+    }
+
+    if (err.name === 'RateLimitError') {
+      return res.status(429).json({
+        error: 'Rate limit exceeded',
+        message: err.message,
+        retryAfter: err.resetTime ? Math.ceil((err.resetTime - Date.now()) / 1000) : 60
+      });
+    }
+
+    console.error('Server error:', err);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    });
   });
 
   // Let Next.js handle all other routes - pass raw request/response
@@ -516,7 +619,8 @@ nextApp.prepare().then(() => {
     if (err) throw err;
     console.log(`🚀 Integrated server running on http://localhost:${port}`);
     console.log(`🔑 JWT Secret length: ${JWT_SECRET.length}`);
-    console.log(`📡 Socket.IO ready`);
+    console.log(`📡 Socket.IO ready with enhanced CORS`);
     console.log(`🌐 Next.js ready`);
+    console.log(`🔒 Security middleware active`);
   });
 });

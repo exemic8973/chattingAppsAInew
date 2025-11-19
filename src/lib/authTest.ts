@@ -35,7 +35,8 @@ export const testAuthFlow = async () => {
         // Step 3: Test backend socket authentication
         console.log('3️⃣ Testing backend socket authentication...');
         const { io } = await import('socket.io-client');
-        const socket = io('http://localhost:3001', {
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
+        const socket = io(socketUrl, {
           transports: ['websocket', 'polling'],
           timeout: 5000
         });
