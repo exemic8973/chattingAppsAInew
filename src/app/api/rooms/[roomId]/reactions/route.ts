@@ -102,9 +102,9 @@ async function handleSendReaction(request: AuthenticatedRequest, context: { para
 
   } catch (error) {
     console.error('Send reaction error:', error);
-    
+
     // Handle rate limiting error
-    if (error.message?.includes('Too many reactions')) {
+    if (error instanceof Error && error.message?.includes('Too many reactions')) {
       return ApiResponse.rateLimitExceeded(
         'Too many reactions. Please wait a moment before sending another reaction.',
         'RATE_LIMIT_EXCEEDED',

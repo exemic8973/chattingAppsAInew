@@ -3,7 +3,7 @@
  * Manages real-time reactions during meetings
  */
 
-import { BaseRepository } from '@/lib/database/BaseRepository';
+import { BaseRepository, BaseEntity } from '@/lib/database/BaseRepository';
 import { DatabaseConnection } from '@/lib/database/DatabaseConnection';
 import { DatabaseError } from '@/lib/errors/ApiError';
 
