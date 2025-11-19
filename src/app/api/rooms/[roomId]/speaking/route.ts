@@ -380,9 +380,3 @@ export async function GET(request: AuthenticatedRequest, context: { params: Prom
       return handleGetSpeakingParticipants(request, context);
   }
 }
-
-/**
- * Export authenticated endpoints
- */
-export const POST_AUTH = withRequiredAuth(POST);
-export const GET_AUTH = withRequiredAuth(GET);

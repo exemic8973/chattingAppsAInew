@@ -419,11 +419,3 @@ export async function GET(request: AuthenticatedRequest, context: { params: Prom
 export async function PATCH(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string }> }) {
   return handleLowerOtherHand(request, context);
 }
-
-/**
- * Export authenticated endpoints
- */
-export const POST_AUTH = withRequiredAuth(POST);
-export const DELETE_AUTH = withRequiredAuth(DELETE);
-export const GET_AUTH = withRequiredAuth(GET);
-export const PATCH_AUTH = withRequiredAuth(PATCH);

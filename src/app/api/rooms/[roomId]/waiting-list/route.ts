@@ -472,10 +472,3 @@ export async function PUT(request: AuthenticatedRequest, context: { params: Prom
 export async function DELETE(request: AuthenticatedRequest, context: { params: Promise<{ roomId: string }> }) {
   return withRequiredAuth(handleRejectJoin)(request, context);
 }
-
-/**
- * Export authenticated endpoints
- */
-export const GET_AUTH = withRequiredAuth(GET);
-export const PUT_AUTH = withRequiredAuth(PUT);
-export const DELETE_AUTH = withRequiredAuth(DELETE);
