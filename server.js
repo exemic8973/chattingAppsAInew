@@ -8,6 +8,9 @@ const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const SecurityMiddleware = require('./src/lib/security/middleware');
+const ValidationSchemas = require('./src/lib/security/validation');
 
 // Room ID generation function (must match frontend)
 const generateRoomId = () => {
@@ -21,19 +24,59 @@ const generateRoomId = () => {
   return `${adj}-${noun}-${numbers}`;
 };
 
+// Initialize security middleware
+const security = new SecurityMiddleware();
+
 // Create a simple Express server
 const app = express();
 
+// Trust proxy for correct IP detection
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(security.setSecurityHeaders);
+
 // Enhanced CORS configuration
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || 'https://your-domain.com'
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:3000'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
-app.use(express.json());
+const corsConfig = security.getCorsConfig();
+app.use(cors(corsConfig));
+
+// Body parsing with size limit
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Rate limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // 5 attempts per windowMs
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress
+});
+
+const socketLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50, // 50 connection attempts per windowMs
+  message: 'Too many connection attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.ip || req.connection.remoteAddress
+});
+
+// Apply rate limiting
+app.use(generalLimiter);
+
+// Audit logging
+app.use(security.auditLog);
 
 // User storage (in production, use a database)
 const users = new Map(); // email -> user data
@@ -426,8 +469,52 @@ io.on('connection', (socket) => {
     });
     
     console.log(`✅ user-joined event broadcast completed for ${userName}`);
+  });
 
-    console.log(`✅ Join room process completed for ${userName}`);
+  // Leave room event - CRITICAL for proper user management
+  socket.on('leave-room', (data) => {
+    const { roomId, userId, userName } = data;
+    
+    console.log(`🚪 User ${userName} (${userId}) leaving room ${roomId}`);
+    
+    const room = rooms.get(roomId);
+    if (!room) {
+      console.log(`❌ Room ${roomId} not found`);
+      socket.emit('error', { message: 'Room not found' });
+      return;
+    }
+    
+    // Find and remove participant
+    const participantIndex = room.participants.findIndex(p => p.id === userId);
+    if (participantIndex === -1) {
+      console.log(`❌ User ${userId} not found in room ${roomId}`);
+      socket.emit('error', { message: 'User not in room' });
+      return;
+    }
+    
+    const participant = room.participants[participantIndex];
+    
+    // Remove from room
+    room.participants.splice(participantIndex, 1);
+    socket.leave(roomId);
+    
+    console.log(`✅ User ${participant.name} removed from room ${roomId}`);
+    console.log(`📊 Room ${roomId} now has ${room.participants.length} participants`);
+    
+    // Notify other users
+    socket.to(roomId).emit('user-left', {
+      userName: participant.name,
+      userId: participant.id,
+      participantCount: room.participants.length
+    });
+    
+    // Send confirmation to leaving user
+    socket.emit('room-left', {
+      roomId,
+      message: 'Successfully left room'
+    });
+    
+    console.log(`📢 Notified room ${roomId} about user departure`);
   });
 
   // Chat message event
@@ -546,9 +633,44 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('🔌 User disconnected:', socket.id);
+    
+    // Find and remove user from all rooms they were in
+    for (const [roomId, room] of rooms.entries()) {
+      const participantIndex = room.participants.findIndex(p => p.socketId === socket.id);
+      
+      if (participantIndex !== -1) {
+        const participant = room.participants[participantIndex];
+        console.log(`👤 User ${participant.name} left room ${roomId}`);
+        
+        // Remove participant from room
+        room.participants.splice(participantIndex, 1);
+        
+        // Notify other users in the room
+        socket.to(roomId).emit('user-left', {
+          userName: participant.name,
+          userId: participant.id,
+          participantCount: room.participants.length
+        });
+        
+        console.log(`📢 Notified room ${roomId} that ${participant.name} left`);
+        
+        // If room is empty, optionally clean it up
+        if (room.participants.length === 0) {
+          console.log(`🏠 Room ${roomId} is now empty`);
+          // Optional: rooms.delete(roomId); // Uncomment to auto-delete empty rooms
+        }
+        
+        break; // User can only be in one room at a time
+      }
+    }
+    
+    // Clean up user session
     if (socket.userId) {
       userSessions.delete(socket.userId);
     }
+    
+    connectedUsers.delete(socket.id);
+    console.log(`🧹 Cleaned up user session for ${socket.id}`);
   });
 });
 
@@ -556,30 +678,39 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 
 // Add basic HTTP routes for health checking and debugging
-app.get('/', (req, res) => {
+app.get('/', generalLimiter, (req, res) => {
   res.json({ 
     message: 'Chat server is running',
     timestamp: new Date().toISOString(),
     rooms: Array.from(rooms.keys()),
-    connectedUsers: connectedUsers.size
+    connectedUsers: connectedUsers.size,
+    security: {
+      cors: 'enabled',
+      rateLimiting: 'enabled',
+      securityHeaders: 'enabled'
+    }
   });
 });
 
-app.get('/health', (req, res) => {
+app.get('/health', generalLimiter, (req, res) => {
   res.json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     rooms: Array.from(rooms.keys()),
-    connectedUsers: connectedUsers.size
+    connectedUsers: connectedUsers.size,
+    rateLimit: {
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 100
+    }
   });
 });
 
-app.get('/debug/rooms', (req, res) => {
+app.get('/debug/rooms', generalLimiter, (req, res) => {
   const roomList = Array.from(rooms.entries()).map(([roomId, room]) => ({
     roomId,
     creator: room.creator,
-    passcode: room.passcode,
+    passcode: room.passcode ? '***' : 'none',
     participants: room.participants.length,
     createdAt: room.createdAt
   }));
@@ -587,53 +718,105 @@ app.get('/debug/rooms', (req, res) => {
   res.json({ 
     rooms: roomList,
     totalRooms: rooms.size,
-    connectedUsers: connectedUsers.size
+    connectedUsers: connectedUsers.size,
+    security: {
+      ip: req.ip,
+      rateLimit: req.rateLimit
+    }
   });
 });
 
 // Test endpoint to create a room via HTTP
-app.post('/debug/create-room', (req, res) => {
+app.post('/debug/create-room', generalLimiter, (req, res) => {
   try {
     const { roomId, passcode, userName } = req.body;
     
-    if (!roomId || !passcode || !userName) {
+    // Input sanitization
+    const sanitizedData = {
+      roomId: roomId ? roomId.replace(/[<>]/g, '').trim().substring(0, 50) : null,
+      passcode: passcode ? passcode.replace(/[<>]/g, '').trim().substring(0, 50) : null,
+      userName: userName ? userName.replace(/[<>]/g, '').trim().substring(0, 50) : null
+    };
+    
+    if (!sanitizedData.roomId || !sanitizedData.passcode || !sanitizedData.userName) {
       return res.status(400).json({ 
         error: 'Missing required fields: roomId, passcode, userName' 
       });
     }
     
-    if (rooms.has(roomId)) {
+    // Validate room ID format
+    if (!/^[a-zA-Z0-9_-]+$/.test(sanitizedData.roomId)) {
+      return res.status(400).json({ 
+        error: 'Room ID can only contain letters, numbers, underscores, and hyphens' 
+      });
+    }
+    
+    if (rooms.has(sanitizedData.roomId)) {
       return res.status(409).json({ 
         error: 'Room already exists' 
       });
     }
     
     const room = {
-      id: roomId,
-      passcode: passcode,
+      id: sanitizedData.roomId,
+      passcode: sanitizedData.passcode,
       creator: 'debug-user',
-      creatorName: userName,
+      creatorName: sanitizedData.userName,
       participants: [],
       createdAt: new Date().toISOString()
     };
     
-    rooms.set(roomId, room);
+    rooms.set(sanitizedData.roomId, room);
     
-    console.log(`🧪 Debug room created: ${roomId} by ${userName}`);
+    console.log(`🧪 Debug room created: ${sanitizedData.roomId} by ${sanitizedData.userName}`);
     
     res.json({ 
       message: 'Room created successfully',
+      security: {
+        ip: req.ip,
+        rateLimit: req.rateLimit
+      },
       room: {
-        roomId,
-        passcode,
-        creator: userName
+        roomId: sanitizedData.roomId,
+        passcode: '***',
+        creator: sanitizedData.userName
       }
     });
     
   } catch (error) {
     console.error('❌ Debug room creation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      error: 'Internal server error',
+      security: {
+        ip: req.ip
+      }
+    });
   }
+});
+
+// Error handler for security middleware
+app.use((err, req, res, next) => {
+  if (err.name === 'CorsError' || err.message?.includes('not allowed by CORS')) {
+    return res.status(403).json({
+      error: 'CORS policy violation',
+      message: 'Origin not allowed',
+      security: true
+    });
+  }
+
+  if (err.name === 'RateLimitError') {
+    return res.status(429).json({
+      error: 'Rate limit exceeded',
+      message: err.message,
+      retryAfter: err.resetTime ? Math.ceil((err.resetTime - Date.now()) / 1000) : 60
+    });
+  }
+
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
 });
 
 httpServer.listen(PORT, () => {

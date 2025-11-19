@@ -313,9 +313,9 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       });
     });
 
-    socket.on('user-left', (userName: string) => {
-      console.log('👤 User left:', userName);
-      setUsers(prev => prev.filter(user => user.name !== userName));
+    socket.on('user-left', (data: { userName: string; userId: string; participantCount: number }) => {
+      console.log('👤 User left:', data);
+      setUsers(prev => prev.filter(user => user.name !== data.userName));
     });
 
     socket.on('new-message', (message: Message) => {
@@ -524,9 +524,9 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
         });
       });
 
-      socket.on('user-left', (userName: string) => {
-        console.log('👤 [HOST] RECEIVED user-left EVENT:', userName);
-        setUsers(prev => prev.filter(user => user.name !== userName));
+      socket.on('user-left', (data: { userName: string; userId: string; participantCount: number }) => {
+        console.log('👤 [HOST] RECEIVED user-left EVENT:', data);
+        setUsers(prev => prev.filter(user => user.name !== data.userName));
       });
 
       socket.on('new-message', (message: Message) => {
@@ -580,49 +580,35 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
               return;
             }
 
-            console.log('✅ Owner authentication complete, now updating socket in room...');
+            console.log('✅ Owner authentication complete, now joining room as owner...');
 
-            // 🔥 CRITICAL FIX: Handle owner socket update more robustly
-            const proceedWithSocketUpdate = async () => {
-              try {
-                console.log('📤 Attempting to emit update-owner-socket event...');
-                
-                // Wait a bit to ensure everything is properly initialized
-                await new Promise(resolve => setTimeout(resolve, 200));
-                
-                if (!isMountedRef.current) {
-                  console.log('⏭️ Component unmounted during socket update');
-                  return;
-                }
-                
-                console.log('📤 Emitting update-owner-socket event with:', { roomId, passcode });
-                socket.emit('update-owner-socket', { roomId, passcode });
-                
-                initState.hasJoinedRoom = true;
-                console.log('✅ Successfully marked room as joined after owner socket update');
-                
-              } catch (error) {
-                console.log('❌ Error in owner socket update:', error);
-                // Don't mark as joined if there's an error - let it retry
-              }
-            };
+            // 🔥 CRITICAL FIX: Owner should also join the room, not just update socket
+            // This ensures the owner is in the participants list
+            const persistentUserId = localStorage.getItem('socketUserId');
+            console.log('🚀 Sending join-room event as owner:', { roomId, userName, passcode, persistentUserId });
 
-            // Try to proceed immediately, but handle connection issues gracefully
             if (socket.connected) {
-              console.log('✅ Socket connected, proceeding with owner update');
-              proceedWithSocketUpdate();
+              socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+              initState.hasJoinedRoom = true;
+              console.log('✅ Successfully sent join-room as owner');
             } else {
-              console.log('⏳ Socket not connected yet, will proceed when connected');
-              socket.once('connect', proceedWithSocketUpdate);
+              console.log('⏳ Waiting for socket connection before joining...');
+              socket.once('connect', () => {
+                if (!isMountedRef.current) return; // Check again before emitting
+                console.log('✅ Socket connected, now joining room as owner...');
+                socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+                initState.hasJoinedRoom = true;
+              });
             }
           })
           .catch((error) => {
             if (!isMountedRef.current) return; // Don't process errors if unmounted
 
             console.error('❌ Owner authentication failed:', error);
-            // Try to update socket anyway with passcode
+            // Try to join anyway
+            const persistentUserId = localStorage.getItem('socketUserId');
             if (socket.connected) {
-              socket.emit('update-owner-socket', { roomId, passcode });
+              socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
             }
             // Initialize empty state
             setUsers([]);
@@ -1161,13 +1147,30 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
 
   // Helper function to handle leaving the meeting
   const handleLeaveMeeting = () => {
+    console.log('🚪 User leaving meeting...');
+
+    // Notify server that user is leaving
+    const socket = getSocket();
+    if (socket && roomId && userName) {
+      const userId = localStorage.getItem('userId') || `guest-${socket.id}`;
+      socket.emit('leave-room', {
+        roomId,
+        userId,
+        userName
+      });
+
+      console.log('📤 Sent leave-room event to server');
+    }
+    
     // Clean up call if in progress
     if (callState.isInCall || callState.isCalling) {
       endCall(true);
     }
 
-    // Navigate back to home
-    window.location.href = '/';
+    // Navigate back to home after a short delay to allow event to be sent
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 300);
   };
 
   // Toggle chat panel
@@ -1251,30 +1254,23 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
       const socket = getSocket();
       if (socket.connected) {
         console.log('✅ Socket connected, forcing room state refresh');
-        
-        if (isOwner) {
-          console.log('👑 Owner detected, updating socket in room');
-          socket.emit('update-owner-socket', { roomId, passcode });
-        } else {
-          console.log('👤 Regular user, joining room with credentials');
-          const persistentUserId = localStorage.getItem('socketUserId');
-          socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
-        }
-        
+
+        // Both owner and regular users use join-room
+        console.log(isOwner ? '👑 Owner detected, joining room with credentials' : '👤 Regular user, joining room with credentials');
+        const persistentUserId = localStorage.getItem('socketUserId');
+        socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+
         currentRoomInitState.hasJoinedRoom = true;
       } else {
         console.log('⏳ Socket not connected, will retry when connected');
         socket.once('connect', () => {
           if (!isMountedRef.current) return;
           console.log('✅ Socket now connected, proceeding with refresh');
-          
-          if (isOwner) {
-            socket.emit('update-owner-socket', { roomId, passcode });
-          } else {
-            const persistentUserId = localStorage.getItem('socketUserId');
-            socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
-          }
-          
+
+          // Both owner and regular users use join-room
+          const persistentUserId = localStorage.getItem('socketUserId');
+          socket.emit('join-room', { roomId, passcode, userName, persistentUserId });
+
           currentRoomInitState.hasJoinedRoom = true;
         });
       }
