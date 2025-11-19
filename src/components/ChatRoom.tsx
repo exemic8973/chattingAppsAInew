@@ -406,7 +406,7 @@ export default function ChatRoom({ roomId, userName, passcode, isOwner = false }
     // Enhanced Phase 2 socket event listeners
     socket.on('participant-joined-waiting', (data: { userId: string; userName: string; timestamp: number }) => {
       console.log('👤 Participant joined waiting room:', data);
-      setWaitingParticipants(prev => [...prev, data]);
+      setWaitingParticipants(prev => [...prev, { id: data.userId, name: data.userName, timestamp: data.timestamp }]);
     });
 
     socket.on('participant-left-waiting', (data: { userId: string }) => {
