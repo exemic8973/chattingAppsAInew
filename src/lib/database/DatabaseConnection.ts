@@ -179,7 +179,6 @@ export class DatabaseConnectionFactory {
 export const db = DatabaseConnectionFactory.getInstance();
 
 export default {
-  DatabaseConnection,
   PostgreSQLConnection,
   SQLiteConnection,
   DatabaseConnectionFactory,
