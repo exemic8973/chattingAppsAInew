@@ -127,14 +127,42 @@ export class DatabaseError extends ApiError {
     return new DatabaseError('Database connection failed', 'CONNECTION_FAILED', details);
   }
 
-  static queryFailed(details?: any): DatabaseError {
-    return new DatabaseError('Database query failed', 'QUERY_FAILED', details);
+  static queryFailed(messageOrDetails?: string | any, details?: any): DatabaseError {
+    // If first parameter is a string, treat it as message; otherwise treat it as details
+    if (typeof messageOrDetails === 'string') {
+      return new DatabaseError(messageOrDetails, 'QUERY_FAILED', details);
+    }
+    return new DatabaseError('Database query failed', 'QUERY_FAILED', messageOrDetails);
   }
 
   static uniqueConstraintViolation(field: string, details?: any): DatabaseError {
     return new DatabaseError(
-      `Unique constraint violation on field: ${field}`, 
-      'UNIQUE_CONSTRAINT_VIOLATION', 
+      `Unique constraint violation on field: ${field}`,
+      'UNIQUE_CONSTRAINT_VIOLATION',
+      details
+    );
+  }
+
+  static foreignKeyViolation(message: string, details?: any): DatabaseError {
+    return new DatabaseError(
+      message,
+      'FOREIGN_KEY_VIOLATION',
+      details
+    );
+  }
+
+  static notFound(message: string, details?: any): DatabaseError {
+    return new DatabaseError(
+      message,
+      'NOT_FOUND',
+      details
+    );
+  }
+
+  static rateLimitExceeded(message: string, details?: any): DatabaseError {
+    return new DatabaseError(
+      message,
+      'RATE_LIMIT_EXCEEDED',
       details
     );
   }

@@ -153,7 +153,7 @@ export class RoomRepository extends BaseRepository<Room> {
 
       return result.rows?.[0] || result[0];
     } catch (error) {
-      if (error.message?.includes('passcode') && error.message?.includes('already exists')) {
+      if (error instanceof Error && error.message?.includes('passcode') && error.message?.includes('already exists')) {
         throw DatabaseError.uniqueConstraintViolation('passcode', 'Room with this passcode already exists');
       }
       throw DatabaseError.queryFailed(`Failed to create room: ${error}`);
@@ -201,10 +201,10 @@ export class RoomRepository extends BaseRepository<Room> {
 
       return result.rows?.[0] || result[0];
     } catch (error) {
-      if (error.message === 'Room not found') {
+      if (error instanceof Error && error.message === 'Room not found') {
         throw DatabaseError.notFound('Room not found');
       }
-      if (error.message?.includes('passcode') && error.message?.includes('already in use')) {
+      if (error instanceof Error && error.message?.includes('passcode') && error.message?.includes('already in use')) {
         throw DatabaseError.uniqueConstraintViolation('passcode', 'Passcode already in use by another room');
       }
       throw DatabaseError.queryFailed(`Failed to update room: ${error}`);

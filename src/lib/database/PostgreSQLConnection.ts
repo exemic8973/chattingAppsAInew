@@ -4,8 +4,8 @@
  */
 
 import { config } from '@/lib/config';
-import { DatabaseConnection } from '@/lib/database/DatabaseConnection';
 import { DatabaseError } from '@/lib/errors/ApiError';
+import type { DatabaseConnection, DatabaseTransaction } from './DatabaseManager';
 
 /**
  * PostgreSQL connection implementation
@@ -30,6 +30,11 @@ export class PostgreSQLConnection implements DatabaseConnection {
   }
 
   async queryOne(sql: string, params: any[] = []): Promise<any | null> {
+    // PostgreSQL implementation
+    throw new Error('PostgreSQL not yet implemented - use SQLite for now');
+  }
+
+  async queryAll(sql: string, params: any[] = []): Promise<any[]> {
     // PostgreSQL implementation
     throw new Error('PostgreSQL not yet implemented - use SQLite for now');
   }

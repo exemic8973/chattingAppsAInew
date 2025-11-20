@@ -133,7 +133,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
       return result.rows?.[0] || result[0];
     } catch (error) {
-      if (error.message?.includes('unique constraint') || error.message?.includes('UNIQUE')) {
+      if (error instanceof Error && (error.message?.includes('unique constraint') || error.message?.includes('UNIQUE'))) {
         throw DatabaseError.uniqueConstraintViolation('email', `Failed to create ${this.entityName}: duplicate entry`);
       }
       throw DatabaseError.queryFailed(`Failed to create ${this.entityName}: ${error}`);
@@ -164,10 +164,10 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
       return result.rows?.[0] || result[0];
     } catch (error) {
-      if (error.message?.includes('not found')) {
+      if (error instanceof Error && error.message?.includes('not found')) {
         throw DatabaseError.notFound(`${this.entityName} not found`);
       }
-      if (error.message?.includes('unique constraint') || error.message?.includes('UNIQUE')) {
+      if (error instanceof Error && (error.message?.includes('unique constraint') || error.message?.includes('UNIQUE'))) {
         throw DatabaseError.uniqueConstraintViolation('email', `Failed to update ${this.entityName}: duplicate entry`);
       }
       throw DatabaseError.queryFailed(`Failed to update ${this.entityName}: ${error}`);

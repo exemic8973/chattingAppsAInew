@@ -1,5 +1,6 @@
 const rateLimit = require('express-rate-limit');
 const { z } = require('zod');
+const { ipKeyGenerator } = rateLimit;
 const SecurityConfig = require('./config');
 
 class SecurityMiddleware {
@@ -18,9 +19,7 @@ class SecurityMiddleware {
       message: this.config.rateLimit.general.message,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => {
-        return req.ip || req.connection.remoteAddress || 'unknown';
-      },
+      keyGenerator: ipKeyGenerator,
       skip: (req) => {
         return process.env.NODE_ENV === 'test';
       }
@@ -32,9 +31,7 @@ class SecurityMiddleware {
       message: this.config.rateLimit.auth.message,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => {
-        return req.ip || req.connection.remoteAddress || 'unknown';
-      },
+      keyGenerator: ipKeyGenerator,
       skip: (req) => {
         return process.env.NODE_ENV === 'test';
       }
@@ -46,9 +43,7 @@ class SecurityMiddleware {
       message: this.config.rateLimit.socket.message,
       standardHeaders: true,
       legacyHeaders: false,
-      keyGenerator: (req) => {
-        return req.ip || req.connection.remoteAddress || 'unknown';
-      },
+      keyGenerator: ipKeyGenerator,
       skip: (req) => {
         return process.env.NODE_ENV === 'test';
       }

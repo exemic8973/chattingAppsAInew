@@ -76,7 +76,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
    */
   async findByRoomAndUser(roomId: string, userId: string): Promise<RoomParticipant | null> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND user_id = $2 LIMIT 1`,
         [roomId, userId]
       );
@@ -95,7 +95,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND join_status != 'removed' ORDER BY joined_at ASC`,
         [roomId]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find participants by room: ${error}`);
     }
@@ -110,7 +110,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND join_status = 'approved' AND left_at IS NULL ORDER BY joined_at ASC`,
         [roomId]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find active participants: ${error}`);
     }
@@ -125,7 +125,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND join_status = 'waiting' ORDER BY joined_at ASC`,
         [roomId]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find waiting participants: ${error}`);
     }
@@ -140,7 +140,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND is_hand_raised = TRUE AND join_status = 'approved' ORDER BY joined_at ASC`,
         [roomId]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find participants with raised hands: ${error}`);
     }
@@ -151,7 +151,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
    */
   async isUserHost(roomId: string, userId: string): Promise<boolean> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT is_host FROM ${this.tableName} WHERE room_id = $1 AND user_id = $2 AND join_status = 'approved' LIMIT 1`,
         [roomId, userId]
       );
@@ -166,7 +166,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
    */
   async getRoomHost(roomId: string): Promise<RoomParticipant | null> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 AND is_host = TRUE AND join_status = 'approved' LIMIT 1`,
         [roomId]
       );
@@ -189,7 +189,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
         params.push(status);
       }
       
-      const result = await this.db.queryOne(query, params);
+      const result = await this.queryOne(query, params);
       return parseInt(result?.count || '0');
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to count participants: ${error}`);
@@ -240,7 +240,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
       
       return this.update(participant.id, updates);
     } catch (error) {
-      if (error.message === 'Participant not found') {
+      if (error instanceof Error && error.message === 'Participant not found') {
         throw DatabaseError.notFound('Participant not found');
       }
       throw DatabaseError.queryFailed(`Failed to update participant status: ${error}`);
@@ -287,7 +287,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
   async getRecentHostActions(roomId: string, limit: number = 50): Promise<any[]> {
     try {
       const result = await this.db.query(
-        `SELECT ha.*, u.user_name as host_name, tu.user_name as target_name 
+        `SELECT ha.*, u.user_name as host_name, tu.user_name as target_name
          FROM host_actions ha
          JOIN users u ON ha.host_id = u.id
          JOIN users tu ON ha.target_user_id = tu.id
@@ -296,7 +296,7 @@ export class RoomParticipantRepository extends BaseRepository<RoomParticipant> {
          LIMIT $2`,
         [roomId, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to get recent host actions: ${error}`);
     }

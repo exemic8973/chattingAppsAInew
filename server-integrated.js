@@ -10,6 +10,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const next = require('next');
 const rateLimit = require('express-rate-limit');
+const { ipKeyGenerator } = rateLimit;
 const { userOps, roomOps, messageOps } = require('./database');
 const { setupPhase2SocketEvents } = require('./server-phase2-enhancements');
 const SecurityMiddleware = require('./src/lib/security/middleware');
@@ -79,7 +80,7 @@ nextApp.prepare().then(() => {
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+    keyGenerator: ipKeyGenerator
   });
 
   const authLimiter = rateLimit({
@@ -88,7 +89,7 @@ nextApp.prepare().then(() => {
     message: 'Too many authentication attempts, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+    keyGenerator: ipKeyGenerator
   });
 
   const socketLimiter = rateLimit({
@@ -97,7 +98,7 @@ nextApp.prepare().then(() => {
     message: 'Too many connection attempts, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => req.ip || req.connection.remoteAddress
+    keyGenerator: ipKeyGenerator
   });
 
   // Apply general rate limiting
