@@ -83,7 +83,9 @@ export default function SignupPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        },
+        },
+        body: JSON.stringify(payload),
+      });
 
       console.log('📊 API Response status:', response.status);
       
