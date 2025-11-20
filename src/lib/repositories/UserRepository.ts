@@ -81,7 +81,7 @@ export class UserRepository extends BaseRepository<User> {
       }
 
       // Fallback to new database interface
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT * FROM ${this.tableName} WHERE email = ? LIMIT 1`,
         [emailLower]
       );
@@ -121,7 +121,7 @@ export class UserRepository extends BaseRepository<User> {
       }
 
       // Fallback to new database interface
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT COUNT(*) as count FROM ${this.tableName} WHERE email = ?`,
         [emailLower]
       );
@@ -170,9 +170,9 @@ export class UserRepository extends BaseRepository<User> {
 
       // Fallback to new database interface
       const result = await this.db.execute(
-        `INSERT INTO ${this.tableName} (id, email, password, user_name, created_at, updated_at) 
+        `INSERT INTO ${this.tableName} (id, email, password, user_name, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [id, data.email.toLowerCase(), hashedPassword, data.userName.trim(), now, now]
+        [id, data.email.toLowerCase(), hashedPassword, data.fullName.trim(), now, now]
       );
 
       if (result.changes > 0) {
@@ -350,7 +350,7 @@ export class UserRepository extends BaseRepository<User> {
    */
   async findByIdSafe(id: string): Promise<Omit<User, 'password'> | null> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT id, email, user_name, created_at, updated_at FROM ${this.tableName} WHERE id = $1 LIMIT 1`,
         [id]
       );
@@ -369,7 +369,7 @@ export class UserRepository extends BaseRepository<User> {
       const offset = (page - 1) * limit;
 
       // Get total count
-      const countResult = await this.db.queryOne(`SELECT COUNT(*) as total FROM ${this.tableName}`);
+      const countResult = await this.queryOne(`SELECT COUNT(*) as total FROM ${this.tableName}`);
       const total = parseInt(countResult?.total || '0');
 
       // Get paginated data (without password)

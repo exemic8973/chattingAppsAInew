@@ -48,7 +48,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
         `SELECT * FROM ${this.tableName} WHERE room_id = $1 ORDER BY created_at DESC LIMIT $2`,
         [roomId, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find reactions by room: ${error}`);
     }
@@ -63,7 +63,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
         `SELECT * FROM ${this.tableName} WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
         [userId, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to find reactions by user: ${error}`);
     }
@@ -75,7 +75,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
   async getRecentReactions(roomId: string, limit: number = 50): Promise<any[]> {
     try {
       const result = await this.db.query(
-        `SELECT mr.*, u.user_name 
+        `SELECT mr.*, u.user_name
          FROM ${this.tableName} mr
          JOIN users u ON mr.user_id = u.id
          WHERE mr.room_id = $1
@@ -83,7 +83,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
          LIMIT $2`,
         [roomId, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to get recent reactions: ${error}`);
     }
@@ -99,7 +99,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
   }> {
     try {
       // Total reactions
-      const totalResult = await this.db.queryOne(
+      const totalResult = await this.queryOne(
         `SELECT COUNT(*) as total FROM ${this.tableName} WHERE room_id = $1`,
         [roomId]
       );
@@ -107,15 +107,15 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
 
       // Reactions by type
       const typeResult = await this.db.query(
-        `SELECT reaction_type, COUNT(*) as count 
-         FROM ${this.tableName} 
-         WHERE room_id = $1 
-         GROUP BY reaction_type 
+        `SELECT reaction_type, COUNT(*) as count
+         FROM ${this.tableName}
+         WHERE room_id = $1
+         GROUP BY reaction_type
          ORDER BY count DESC`,
         [roomId]
       );
       const reactionsByType: Record<string, number> = {};
-      typeResult.forEach((row: any) => {
+      (typeResult.rows || []).forEach((row: any) => {
         reactionsByType[row.reaction_type] = parseInt(row.count);
       });
 
@@ -129,7 +129,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
          LIMIT 10`,
         [roomId]
       );
-      const topReactors = topReactorsResult.map((row: any) => ({
+      const topReactors = (topReactorsResult.rows || []).map((row: any) => ({
         userId: row.user_id,
         userName: row.user_name,
         reactionCount: parseInt(row.reaction_count)
@@ -151,9 +151,9 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
   async createReaction(data: CreateReactionData): Promise<MeetingReaction> {
     try {
       // Check for rate limiting (max 10 reactions per minute per user)
-      const recentCount = await this.db.queryOne(
-        `SELECT COUNT(*) as count 
-         FROM ${this.tableName} 
+      const recentCount = await this.queryOne(
+        `SELECT COUNT(*) as count
+         FROM ${this.tableName}
          WHERE user_id = $1 AND room_id = $2 AND created_at > datetime('now', '-1 minute')`,
         [data.userId, data.roomId]
       );
@@ -163,11 +163,10 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
       }
 
       return this.create({
-        ...data,
-        createdAt: new Date().toISOString()
+        ...data
       });
     } catch (error) {
-      if (error.message?.includes('Too many reactions')) {
+      if (error instanceof Error && error.message?.includes('Too many reactions')) {
         throw error;
       }
       throw DatabaseError.queryFailed(`Failed to create reaction: ${error}`);
@@ -201,7 +200,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
         `DELETE FROM ${this.tableName} WHERE created_at < datetime('now', '-${olderThanDays} days')`,
         []
       );
-      return result.changes;
+      return result.rowCount;
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to cleanup old reactions: ${error}`);
     }
@@ -213,7 +212,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
   async getReactionTimeline(roomId: string, timeWindowMinutes: number = 60): Promise<any[]> {
     try {
       const result = await this.db.query(
-        `SELECT 
+        `SELECT
            strftime('%Y-%m-%d %H:%M:00', created_at) as time_bucket,
            reaction_type,
            COUNT(*) as count
@@ -223,7 +222,7 @@ export class MeetingReactionRepository extends BaseRepository<MeetingReaction> {
          ORDER BY time_bucket DESC, count DESC`,
         [roomId]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to get reaction timeline: ${error}`);
     }

@@ -2,7 +2,7 @@
  * Repository factory for managing all data access repositories
  */
 
-import { db } from '@/lib/database/DatabaseManager';
+import { db } from '@/lib/database/DatabaseConnection';
 import { UserRepository } from './UserRepository';
 import { RoomRepository } from './RoomRepository';
 import { RoomParticipantRepository } from './RoomParticipantRepository';
