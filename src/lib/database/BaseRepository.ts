@@ -194,7 +194,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
         [id]
       );
 
-      return result.changes > 0;
+      return result.rowCount > 0;
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to delete ${this.entityName}: ${error}`);
     }
