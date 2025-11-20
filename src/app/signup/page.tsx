@@ -74,13 +74,16 @@ export default function SignupPage() {
       console.log('📤 Sending to API:');
       console.log('Payload:', JSON.stringify(payload, null, 2));
       
-      const response = await fetch('http://localhost:3000/api/auth/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Determine the API URL based on environment
+      const apiUrl = typeof window !== 'undefined' 
+        ? '/api/auth/signup'  // Client-side: relative URL
+        : `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3000'}/api/auth/signup`; // Server-side
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
-      });
 
       console.log('📊 API Response status:', response.status);
       
