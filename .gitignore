@@ -37,5 +37,6 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
-\"chat-new.db\"  
-\"chat-new.db-*\" 
+chat-new.db
+chat-new.db-*
+commit-msg.txt 
