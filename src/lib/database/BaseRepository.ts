@@ -83,13 +83,13 @@ export abstract class BaseRepository<T extends BaseEntity> {
 
       // Get paginated data
       const dataResult = await this.db.query(
-        `SELECT * FROM ${this.tableName} 
-         ORDER BY ${orderBy} ${orderDirection} 
+        `SELECT * FROM ${this.tableName}
+         ORDER BY ${orderBy} ${orderDirection}
          LIMIT $1 OFFSET $2`,
         [limit, offset]
       );
 
-      const data = dataResult || [];
+      const data = dataResult.rows || [];
       const totalPages = Math.ceil(total / limit);
 
       return {
