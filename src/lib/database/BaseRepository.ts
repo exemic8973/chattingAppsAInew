@@ -47,6 +47,14 @@ export abstract class BaseRepository<T extends BaseEntity> {
   constructor(protected db: DatabaseConnection) {}
 
   /**
+   * Helper method to query and return first row
+   */
+  protected async queryOne(sql: string, params?: any[]): Promise<any | null> {
+    const result = await this.db.query(sql, params);
+    return result.rows && result.rows.length > 0 ? result.rows[0] : null;
+  }
+
+  /**
    * Find entity by ID
    */
   async findById(id: string): Promise<T | null> {
