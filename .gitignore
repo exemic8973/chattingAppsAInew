@@ -37,33 +37,3 @@ Thumbs.db
 # Testing
 coverage/
 .nyc_output/
-
-# Database files
-chat-new.db
-chat-new.db-*
-
-# Temporary files
-commit-msg.txt
-
-# Development/Debug files
-.env.development
-.env.postgresql.example
-.env.production
-.iflow/
-browser-debug.js
-browser-test.html
-build-latest.txt
-build-output.txt
-check-db-*.js
-cleanup-phase2.js
-comprehensive-test.js
-debug-*.js
-final-verification.js
-phase2-integration-simple.js
-server-phase2-enhancements.js
-setup-postgresql.bat
-simulate-browser-signup.js
-test-*.js
-test-connection.html
-tsconfig.tsbuildinfo
-verify-*.js
