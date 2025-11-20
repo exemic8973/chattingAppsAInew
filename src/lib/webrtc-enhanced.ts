@@ -198,7 +198,7 @@ export class EnhancedMultiPeerManager {
         throw new Error('Screen sharing is not supported in this browser');
       }
 
-      const screenConstraints: DisplayMediaStreamConstraints = {
+      const screenConstraints: any = {
         video: {
           cursor: 'always',
           displaySurface: 'monitor'
