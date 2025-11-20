@@ -31,7 +31,7 @@ export class PostgreSQLConnection implements DatabaseConnection {
       const result = await this.pool.query(sql, params);
       return { rows: result.rows, rowCount: result.rowCount };
     } catch (error) {
-      throw DatabaseError.queryFailed(`PostgreSQL query failed: ${error.message}`);
+      throw DatabaseError.queryFailed(`PostgreSQL query failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -40,7 +40,7 @@ export class PostgreSQLConnection implements DatabaseConnection {
       const result = await this.pool.query(sql, params);
       return { rowCount: result.rowCount };
     } catch (error) {
-      throw DatabaseError.queryFailed(`PostgreSQL execute failed: ${error.message}`);
+      throw DatabaseError.queryFailed(`PostgreSQL execute failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -92,7 +92,7 @@ export class SQLiteConnection implements DatabaseConnection {
       const result = params ? stmt.all(...params) : stmt.all();
       return { rows: result || [], rowCount: result?.length || 0 };
     } catch (error) {
-      throw DatabaseError.queryFailed(`SQLite query failed: ${error.message}`);
+      throw DatabaseError.queryFailed(`SQLite query failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -102,7 +102,7 @@ export class SQLiteConnection implements DatabaseConnection {
       const result = params ? stmt.run(...params) : stmt.run();
       return { rowCount: result.changes };
     } catch (error) {
-      throw DatabaseError.queryFailed(`SQLite execute failed: ${error.message}`);
+      throw DatabaseError.queryFailed(`SQLite execute failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
