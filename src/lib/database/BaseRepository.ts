@@ -59,7 +59,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   async findById(id: string): Promise<T | null> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT * FROM ${this.tableName} WHERE id = $1 LIMIT 1`,
         [id]
       );
@@ -78,7 +78,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
       const offset = (page - 1) * limit;
 
       // Get total count
-      const countResult = await this.db.queryOne(`SELECT COUNT(*) as total FROM ${this.tableName}`);
+      const countResult = await this.queryOne(`SELECT COUNT(*) as total FROM ${this.tableName}`);
       const total = parseInt(countResult?.total || '0');
 
       // Get paginated data
@@ -125,7 +125,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
       const placeholders = Object.keys(entity).map((_, index) => `$${index + 1}`).join(', ');
       const values = Object.values(entity);
 
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `INSERT INTO ${this.tableName} (${fields}) VALUES (${placeholders}) RETURNING *`,
         values
       );
@@ -163,7 +163,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
         .join(', ');
       const values = [id, ...Object.values(updateData)];
 
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `UPDATE ${this.tableName} SET ${fields} WHERE id = $1 RETURNING *`,
         values
       );
@@ -210,7 +210,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
         sql += ` WHERE ${whereClause}`;
       }
 
-      const result = await this.db.queryOne(sql, params || []);
+      const result = await this.queryOne(sql, params || []);
       return parseInt(result?.total || '0');
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to count ${this.entityName}s: ${error}`);
@@ -222,7 +222,7 @@ export abstract class BaseRepository<T extends BaseEntity> {
    */
   async exists(id: string): Promise<boolean> {
     try {
-      const result = await this.db.queryOne(
+      const result = await this.queryOne(
         `SELECT COUNT(*) as total FROM ${this.tableName} WHERE id = $1`,
         [id]
       );
