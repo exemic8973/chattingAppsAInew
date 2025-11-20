@@ -175,7 +175,7 @@ export class UserRepository extends BaseRepository<User> {
         [id, data.email.toLowerCase(), hashedPassword, data.fullName.trim(), now, now]
       );
 
-      if (result.changes > 0) {
+      if (result.rowCount > 0) {
         // Return the created user
         return {
           id,
@@ -189,7 +189,7 @@ export class UserRepository extends BaseRepository<User> {
       
       throw new Error('Failed to create user');
     } catch (error) {
-      if (error.message?.includes('already exists')) {
+      if (error instanceof Error && error.message?.includes('already exists')) {
         throw DatabaseError.uniqueConstraintViolation('email', 'User with this email already exists');
       }
       throw error;
@@ -221,14 +221,10 @@ export class UserRepository extends BaseRepository<User> {
 
       // Use the base repository update method
       const updatedUser = await super.update(id, updateData);
-      
-      // Map database column names back to JavaScript naming
-      return {
-        ...updatedUser,
-        fullName: updatedUser.user_name // Map back to JavaScript naming
-      };
+
+      return updatedUser;
     } catch (error) {
-      if (error.message?.includes('already exists')) {
+      if (error instanceof Error && error.message?.includes('already exists')) {
         throw DatabaseError.uniqueConstraintViolation('email', 'Email already in use');
       }
       throw error;
@@ -265,7 +261,7 @@ export class UserRepository extends BaseRepository<User> {
         `SELECT * FROM ${this.tableName} WHERE email LIKE $1 LIMIT $2`,
         [`%${email.toLowerCase()}%`, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to search users by email: ${error}`);
     }
@@ -280,7 +276,7 @@ export class UserRepository extends BaseRepository<User> {
         `SELECT * FROM ${this.tableName} WHERE user_name LIKE $1 LIMIT $2`,
         [`%${userName}%`, limit]
       );
-      return result;
+      return result.rows || [];
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to search users by username: ${error}`);
     }
@@ -335,11 +331,9 @@ export class UserRepository extends BaseRepository<User> {
    */
   async softDelete(id: string): Promise<User> {
     try {
-      // Add deleted_at timestamp instead of removing the user
-      return this.update(id, {
-        updatedAt: new Date().toISOString()
-        // In a real implementation, you might add a deleted_at field
-      });
+      // In a real implementation, you might add a deleted_at field
+      // For now, just update the updatedAt timestamp (set automatically by update)
+      return this.update(id, {});
     } catch (error) {
       throw DatabaseError.queryFailed(`Failed to soft delete user: ${error}`);
     }
@@ -381,7 +375,7 @@ export class UserRepository extends BaseRepository<User> {
         [limit, offset]
       );
 
-      const data = dataResult || [];
+      const data = dataResult.rows || [];
       const totalPages = Math.ceil(total / limit);
 
       return {
