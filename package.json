@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "node server-integrated.js",
+    "start": "node server.js",
     "start:split": "node start-production.js",
     "start:frontend": "next start -p ${PORT:-3000}",
     "start:backend": "node server.js",

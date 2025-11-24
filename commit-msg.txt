@@ -1,0 +1,5 @@
+Sync development branch with main branch
+
+- Include production fixes: IPv6 address handling, CORS fix in signup form
+- Update gitignore to exclude development/test files
+- Sync all core code changes from main to development

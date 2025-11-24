@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Connection Test</title>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <h1>Testing Frontend-Backend Connection</h1>
+    <div id="status">Connecting...</div>
+    <div id="logs"></div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        
+        function log(message) {
+            const p = document.createElement('p');
+            p.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            logsDiv.appendChild(p);
+        }
+        
+        log('Attempting to connect to Socket.IO...');
+        
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            timeout: 10000,
+            reconnection: true,
+            reconnectionAttempts: 3
+        });
+        
+        socket.on('connect', () => {
+            statusDiv.innerHTML = '<span style="color: green;">✅ Connected to Socket.IO</span>';
+            log('Socket connected with ID: ' + socket.id);
+            log('Transport: ' + socket.io.engine.transport.name);
+        });
+        
+        socket.on('disconnect', (reason) => {
+            statusDiv.innerHTML = '<span style="color: red;">❌ Disconnected</span>';
+            log('Socket disconnected. Reason: ' + reason);
+        });
+        
+        socket.on('connect_error', (error) => {
+            statusDiv.innerHTML = '<span style="color: red;">❌ Connection Error</span>';
+            log('Connection error: ' + error.message);
+        });
+        
+        socket.on('error', (error) => {
+            log('Socket error: ' + error);
+        });
+        
+        // Test API endpoint
+        fetch('/api/health')
+            .then(response => response.json())
+            .then(data => {
+                log('Health API Response: ' + JSON.stringify(data));
+            })
+            .catch(error => {
+                log('Health API Error: ' + error.message);
+            });
+    </script>
+</body>
+</html>

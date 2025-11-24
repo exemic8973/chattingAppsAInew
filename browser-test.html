@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Signup Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input { width: 300px; padding: 8px; margin-bottom: 5px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .result { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Browser Signup Test</h1>
+    <p>This page mimics the exact behavior of the Next.js signup page</p>
+    
+    <form id="signupForm">
+        <div class="form-group">
+            <label for="fullName">Full Name:</label>
+            <input type="text" id="fullName" name="fullName" required placeholder="Enter your full name">
+        </div>
+        
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" required placeholder="Enter your email">
+        </div>
+        
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required placeholder="Enter password (min 6 chars)">
+        </div>
+        
+        <div class="form-group">
+            <label for="confirmPassword">Confirm Password:</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm password">
+        </div>
+        
+        <button type="submit">Sign Up</button>
+    </form>
+    
+    <div id="result" class="result" style="display: none;"></div>
+
+    <script>
+        // Exact same logic as the Next.js signup page
+        const form = document.getElementById('signupForm');
+        const result = document.getElementById('result');
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log('🚀 Form submitted!');
+            
+            // Get form data exactly like React would
+            const fullName = document.getElementById('fullName').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            console.log('📋 Form data:');
+            console.log('Full Name:', fullName);
+            console.log('Email:', email);
+            console.log('Password:', password.substring(0, 3) + '***');
+            console.log('Confirm Password:', confirmPassword.substring(0, 3) + '***');
+            
+            // Same validation as Next.js page
+            if (!email.trim() || !password.trim() || !fullName.trim()) {
+                showResult('❌ All fields are required', false);
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                showResult('❌ Passwords do not match', false);
+                return;
+            }
+            
+            if (password.length < 6) {
+                showResult('❌ Password must be at least 6 characters', false);
+                return;
+            }
+            
+            // Full name validation
+            if (fullName.length < 2) {
+                showResult('❌ Full name must be at least 2 characters', false);
+                return;
+            }
+            
+            if (fullName.length > 50) {
+                showResult('❌ Full name must be less than 50 characters', false);
+                return;
+            }
+            
+            if (!/^[a-zA-Z\s\-\']+$/.test(fullName)) {
+                showResult('❌ Full name can only contain letters, spaces, hyphens, and apostrophes', false);
+                return;
+            }
+            
+            // Create payload exactly like React
+            const payload = {
+                email: email.trim(),
+                password: password,
+                fullName: fullName.trim(),
+                confirmPassword: confirmPassword
+            };
+            
+            console.log('📤 Sending to API:');
+            console.log('Payload:', JSON.stringify(payload, null, 2));
+            
+            try {
+                console.log('🌐 Making API request...');
+                const response = await fetch('http://localhost:3000/api/auth/signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                console.log('📊 Response status:', response.status);
+                
+                const data = await response.json();
+                console.log('📋 Response data:', data);
+                
+                if (response.ok) {
+                    showResult('✅ Signup successful! User created with fullName: ' + data.data.user.fullName, true);
+                    console.log('✅ Success! Token:', data.data.token.substring(0, 20) + '...');
+                } else {
+                    if (data.error?.details) {
+                        showResult('❌ Validation failed:\n' + JSON.stringify(data.error.details, null, 2), false);
+                    } else {
+                        showResult('❌ Signup failed: ' + (data.message || 'Unknown error'), false);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('❌ Network error:', error);
+                showResult('❌ Network error: ' + error.message, false);
+            }
+        });
+        
+        function showResult(message, success) {
+            result.style.display = 'block';
+            result.className = 'result ' + (success ? 'success' : 'error');
+            result.innerHTML = message;
+        }
+        
+        console.log('🛠️ Browser debugging tool loaded!');
+        console.log('💡 Fill out the form and click submit to see exactly what gets sent to the API');
+    </script>
+</body>
+</html>

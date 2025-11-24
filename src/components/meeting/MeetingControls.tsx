@@ -1,30 +1,35 @@
 import React from 'react';
 import { MeetingControls as MeetingControlsState, MeetingCallbacks } from '@/types';
 
-interface MeetingControlsProps extends MeetingControlsState, MeetingCallbacks {}
+interface MeetingControlsProps extends MeetingControlsState, MeetingCallbacks { }
 
-export default function MeetingControls({ 
-  isMuted, 
-  isVideoOff, 
-  onToggleMute, 
-  onToggleVideo, 
-  onToggleChat, 
-  onToggleParticipants, 
-  onLeaveMeeting 
+export default function MeetingControls({
+  isMuted,
+  isVideoOff,
+  onToggleMute,
+  onToggleVideo,
+  onToggleChat,
+  onToggleParticipants,
+  onLeaveMeeting
 }: MeetingControlsProps) {
   return (
-    <div className="meeting-controls meeting-container" style={{ 
-      position: 'fixed',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      zIndex: 100,
+    <div className="meeting-controls meeting-container" style={{
+      position: 'absolute',
+      bottom: '20px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 40,
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      gap: 'var(--space-md)'
+      gap: 'var(--space-md)',
+      width: 'auto',
+      padding: '10px 20px',
+      borderRadius: '30px',
+      background: 'rgba(0,0,0,0.6)',
+      backdropFilter: 'blur(10px)'
     }}>
-      <button 
+      <button
         onClick={onToggleMute}
         className={`meeting-button ${isMuted ? 'meeting-button-danger' : 'meeting-button-success'}`}
         title={isMuted ? 'Unmute' : 'Mute'}
@@ -34,7 +39,7 @@ export default function MeetingControls({
         {isMuted ? 'Unmute' : 'Mute'}
       </button>
 
-      <button 
+      <button
         onClick={onToggleVideo}
         className={`meeting-button ${isVideoOff ? 'meeting-button-danger' : 'meeting-button-success'}`}
         title={isVideoOff ? 'Turn Camera On' : 'Turn Camera Off'}
@@ -44,7 +49,7 @@ export default function MeetingControls({
         {isVideoOff ? 'Camera On' : 'Camera Off'}
       </button>
 
-      <button 
+      <button
         onClick={onToggleChat}
         className="meeting-button meeting-button-primary"
         title="Toggle Chat"
@@ -54,7 +59,7 @@ export default function MeetingControls({
         Chat
       </button>
 
-      <button 
+      <button
         onClick={onToggleParticipants}
         className="meeting-button meeting-button-primary"
         title="Toggle Participants"
@@ -64,7 +69,7 @@ export default function MeetingControls({
         Participants
       </button>
 
-      <button 
+      <button
         onClick={onLeaveMeeting}
         className="meeting-button meeting-button-danger"
         title="Leave Meeting"
